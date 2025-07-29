@@ -36,3 +36,23 @@ def get_message_group_entry_by_message_id(message_id: str, group_name: str):
     else:
         print(f"No entry found for message ID: {message_id} in group: {group_name}")
         return None
+
+def get_thread_message_group_entry(thread_id: str, group_name: str):
+    """Get message group entry for a specific thread."""
+    if not type(thread_id) is str:
+        thread_id = str(thread_id)
+
+    check_and_create_group_collection(group_name)
+    collection = db[group_name]
+    result = collection.find_one({
+        "messages": {
+            "$elemMatch": {
+                "thread_id": thread_id
+            }
+        }
+    })
+    if result:
+        return result["messages"]
+    else:
+        print(f"No entry found for thread ID: {thread_id} in group: {group_name}")
+        return None

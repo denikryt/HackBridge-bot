@@ -44,6 +44,5 @@ class Registrator(Role):
         super().__init__()
         self.permissions = {
             "register_channel", 
-            "link_channel", 
-            "unlink_channel"
+            "link_channel"
             }

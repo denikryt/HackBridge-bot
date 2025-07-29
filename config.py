@@ -10,8 +10,6 @@ TOKEN = os.environ.get("token")
 MONGODB_URI = os.environ.get("mongodb_uri")
 DB_NAME = "HackBridge"
 
-AVATAR_PATH = "avatar.png"
-
 AVATAR_EMOJIS = [
     ":monkey_face:", ":monkey:", ":gorilla:", ":orangutan:", ":dog:", ":guide_dog:", ":service_dog:", 
     ":poodle:", ":wolf:", ":raccoon:", ":cat:", ":black_cat:", ":lion:", ":tiger:", 

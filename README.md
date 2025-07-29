@@ -2,7 +2,7 @@
 
 A powerful Discord bot that creates seamless message bridges between multiple Discord servers and channels, enabling cross-server communication with advanced permission management and message tracking.
 
-Originally created for the Kyiv Hackerspace Discord community to facilitate communication across multiple servers and channels 
+Originally created for the Kyiv Hackerspace Discord community to facilitate communication across multiple servers and channels with other communities. 
 
 ## ⚠️ Important Disclaimers
 
@@ -17,7 +17,10 @@ Originally created for the Kyiv Hackerspace Discord community to facilitate comm
 - **Multi-Server Communication**: Link channels across different Discord servers
 - **Group Management**: Create and manage groups of linked channels
 - **Real-time Forwarding**: Messages are instantly forwarded to all linked channels
-- **Reply Support**: Handles message replies and maintains conversation context
+- **Reply & Thread Support**: Intelligent handling of message replies and Discord threads
+  - **Cross-Server Replies**: Replies to messages are properly linked across all connected channels
+  - **Thread Forwarding**: Messages from Discord threads are forwarded with thread context
+  - **Reply Chain Preservation**: Maintains conversation flow and reply relationships
 - **Rich Content Support**: Forwards text, images, attachments, and embeds
 
 ### 👑 Advanced Permission System
@@ -96,6 +99,43 @@ Originally created for the Kyiv Hackerspace Discord community to facilitate comm
 | `/show_admins` | Display all bot admins in current server | Any user |
 | `/remove_admin <user_id>` | Remove admin permissions | SuperAdmin |
 | `/remove_registrator <user_id>` | Remove registrator permissions | Admin+ |
+
+## 📖 Channel Registration & Linking Guide
+
+### 🔧 Registration Requirements
+Before channels can be linked together, they must be properly registered:
+
+1. **Same User Registration**: All channels that you want to link together **must be registered by the same user**
+2. **Registrator Permissions**: Only users with Registrator+ permissions can register channels
+3. **One Registration Per User**: Each channel can only be registered by one user at a time
+
+### 🔗 Linking Process
+
+#### Creating a New Channel Group
+1. **Register all channels** you want to link using `/register_channel` in each channel
+2. **Link the first pair** using `/link_channel <guild_id> <channel_id> <group_name>`
+3. **Add additional channels** to the group using `/link_channel_to_group <group_name>`
+
+#### Adding to Existing Groups
+To add a new channel to an existing group:
+1. **Verify ownership**: All existing channels in the target group must be registered by you
+2. **Register the new channel** using `/register_channel`
+3. **Join the group** using `/link_channel_to_group <group_name>`
+
+### ⚠️ Important Notes
+- **Minimum Group Size**: Channel groups must contain at least 2 channels
+- **Maximum Flexibility**: Groups can span multiple Discord servers
+- **User Ownership**: You can only modify groups where you registered all participating channels
+- **Automatic Cleanup**: Registrator permissions are typically temporary and removed after linking
+
+### 📝 Step-by-Step Example
+```
+1. User registers Channel A: /register_channel (in Channel A)
+2. User registers Channel B: /register_channel (in Channel B)  
+3. User creates group: /link_channel <server_B_id> <channel_B_id> "my-group" (in Channel A)
+4. User registers Channel C: /register_channel (in Channel C)
+5. User adds to group: /link_channel_to_group "my-group" (in Channel C)
+```
 
 ## 🏗️ Architecture
 
@@ -190,15 +230,6 @@ If you encounter any issues or have questions:
 2. Verify your permissions in the server
 3. Ensure all required channels are properly registered
 4. Open an issue on GitHub with detailed information
-
-## 🔮 Roadmap
-
-- [ ] Web dashboard for easier management
-- [ ] Message encryption for sensitive communications
-- [ ] Custom message formatting options
-- [ ] Message scheduling and delayed forwarding
-- [ ] Advanced filtering and moderation features
-- [ ] API for external integrations
 
 ---
 

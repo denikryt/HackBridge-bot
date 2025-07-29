@@ -3,7 +3,7 @@ import logging.handlers
 import os
 
 def setup_logging():
-    """Setup simple logging with rotating file handler (64MB splits)"""
+    """Setup simple logging that overwrites log file on each run"""
     
     # Create logs directory
     os.makedirs("logs", exist_ok=True)
@@ -18,11 +18,10 @@ def setup_logging():
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
     
-    # File handler with 64MB rotation
-    file_handler = logging.handlers.RotatingFileHandler(
+    # File handler that overwrites on each run
+    file_handler = logging.FileHandler(
         "logs/bot.log",
-        maxBytes=64 * 1024 * 1024,  # 64MB
-        backupCount=5,
+        mode='w',  # Overwrite mode
         encoding='utf-8'
     )
     file_handler.setFormatter(formatter)
@@ -38,7 +37,7 @@ def setup_logging():
     # Suppress discord.py debug messages
     logging.getLogger('discord').setLevel(logging.WARNING)
     
-    logging.info("Logging initialized - files will rotate at 64MB")
+    logging.info("Logging initialized - log file will be overwritten on each run")
 
 def get_logger(name):
     """Get a logger instance"""

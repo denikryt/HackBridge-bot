@@ -363,7 +363,6 @@ def setup(bot):
         # Load existing links
         try:
             linked_channels = helpers.load_linked_channels()
-            logger.debug("Successfully loaded linked channels data")
         except Exception as e:
             logger.error(f"Failed to load linked channels: {e}")
             await interaction.response.send_message("An error occurred while loading linked channels data.", ephemeral=True)
@@ -459,7 +458,6 @@ def setup(bot):
         
         try:
             linked_channels = helpers.load_linked_channels()
-            logger.debug("Successfully loaded linked channels data")
         except Exception as e:
             logger.error(f"Failed to load linked channels: {e}")
             await interaction.response.send_message("An error occurred while loading data.", ephemeral=True)
@@ -502,7 +500,6 @@ def setup(bot):
         
         try:
             linked_channels = helpers.load_linked_channels()
-            logger.debug("Successfully loaded linked channels data")
         except Exception as e:
             logger.error(f"Failed to load linked channels: {e}")
             await interaction.response.send_message("An error occurred while loading data.", ephemeral=True)
@@ -925,7 +922,6 @@ def setup(bot):
         # Load linked channels data
         try:
             linked_channels = helpers.load_linked_channels()
-            logger.debug("Successfully loaded linked channels data")
         except Exception as e:
             logger.error(f"Failed to load linked channels: {e}")
             await interaction.response.send_message("An error occurred while loading data.", ephemeral=True)
