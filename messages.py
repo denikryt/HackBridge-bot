@@ -1,15 +1,10 @@
-import json
-import random
 import discord
 import helpers
-import config
 import database
-import emoji
 from logger_config import get_logger
 
 logger = get_logger(__name__)
 
-# Handle incoming messages
 async def handle_message(bot, message: discord.Message, from_reply=False):
     """Handles incoming messages and forwards them to linked channels."""
 
