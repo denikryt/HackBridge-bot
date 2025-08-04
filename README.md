@@ -105,8 +105,9 @@ Originally created for the Kyiv Hackerspace Discord community to facilitate comm
 ### 🚀 Quick Setup Instructions
 
 #### 1. **Install the Bot on Both Servers**
-   - Invite HackBridge bot to both Discord servers where you want to link channels
-   - Ensure the bot has appropriate permissions (Send Messages, Manage Messages, etc.)
+   - **Invite HackBridge bot** to both Discord servers where you want to link channels:
+     - **[Click here to invite the bot](https://discord.com/oauth2/authorize?client_id=1393520394136457306&permissions=397821471744&integration_type=0&scope=bot)**
+   - The bot will automatically get the required permissions (Send Messages, Manage Messages, etc.)
 
 #### 2. **Set Up SuperAdmin (Server Admin Only)**
    - In any public channel on your server, run: `/set_superadmin`
