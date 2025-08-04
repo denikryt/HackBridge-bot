@@ -7,6 +7,7 @@ from config import TOKEN
 import commands as command_module
 import messages as message_module
 import message_edits as message_edit_module
+import message_deletes as message_delete_module
 from logger_config import setup_logging, get_logger
 
 # Setup logging before anything else
@@ -60,6 +61,10 @@ async def on_message(message):
 @bot.event
 async def on_message_edit(before, after):
     await message_edit_module.handle_message_edit(bot, before, after)
+
+@bot.event
+async def on_message_delete(message):
+    await message_delete_module.handle_message_delete(bot, message)
 
 @bot.event
 async def on_command_error(ctx, error):
