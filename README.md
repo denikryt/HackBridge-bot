@@ -22,6 +22,10 @@ Originally created for the Kyiv Hackerspace Discord community to facilitate comm
   - **Thread Forwarding**: Messages from Discord threads are forwarded with thread context
   - **Reply Chain Preservation**: Maintains conversation flow and reply relationships
 - **Rich Content Support**: Forwards text, images, attachments, and embeds
+- **Message Synchronization**: 
+  - **Edit Tracking**: When a message is edited in one channel, all linked copies are automatically updated
+  - **Delete Synchronization**: When a message is deleted in one channel, all linked copies are removed
+  - **Cross-Server Consistency**: Maintains message state consistency across all linked channels
 
 ### 👑 Advanced Permission System
 - **SuperAdmin**: Full bot control with server administrator privileges
@@ -33,6 +37,14 @@ Originally created for the Kyiv Hackerspace Discord community to facilitate comm
 - **MongoDB Integration**: Persistent storage of message relationships
 - **Message Grouping**: Track related messages across linked channels
 - **Reply Tracking**: Maintain message thread integrity across servers
+
+### 🔄 Real-time Message Synchronization
+- **Automatic Edit Propagation**: When users edit their messages, changes are instantly reflected across all linked channels
+- **Synchronized Deletions**: Deleting a message removes it from all connected channels simultaneously
+- **Thread-Aware Operations**: Supports edit and delete operations within Discord threads
+- **Intelligent Filtering**: Ignores bot messages and webhook messages to prevent loops
+- **Error Handling**: Gracefully handles permission issues and missing messages across servers
+- **Database Cleanup**: Automatically maintains database integrity by removing orphaned message entries
 
 ### 🎨 Customizable Appearance
 - **Random Avatar Emojis**: Fun, randomized emoji avatars for forwarded messages
@@ -159,6 +171,8 @@ HackBridge-bot/
 ├── main.py                 # Bot entry point and event handlers
 ├── commands.py             # Slash command implementations
 ├── messages.py             # Message forwarding logic
+├── message_edits.py        # Message edit synchronization
+├── message_deletes.py      # Message deletion synchronization
 ├── helpers.py              # Utility functions
 ├── roles.py                # Permission system classes
 ├── database.py             # MongoDB operations
@@ -223,6 +237,8 @@ Registrator (Temporary, set by Admin+)
 - **Server isolation** (admins only manage their own servers)
 - **Temporary registrator system** (automatically removed after linking)
 - **Channel ownership validation**
+- **Message integrity protection** (prevents unauthorized edits/deletes from other bots)
+- **Loop prevention** (ignores bot and webhook messages to prevent infinite loops)
 
 ## 🤝 Contributing
 
