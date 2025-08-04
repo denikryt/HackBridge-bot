@@ -118,7 +118,7 @@ async def get_or_create_webhook(target_channel):
     return webhook
 
 def form_header(message: discord.Message, guild_name: str, channel_group_len: int) -> str:
-    user_name = message.author.name
+    user_name = message.author.display_name
     nickname = f"{emoji.emojize(random.choice(config.AVATAR_EMOJIS))} **{user_name}**"
     guild_name = f"{emoji.emojize(':loud_sound:')}_**{guild_name}**_"
 
