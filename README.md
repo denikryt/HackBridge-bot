@@ -100,42 +100,55 @@ Originally created for the Kyiv Hackerspace Discord community to facilitate comm
 | `/remove_admin <user_id>` | Remove admin permissions | SuperAdmin |
 | `/remove_registrator <user_id>` | Remove registrator permissions | Admin+ |
 
-## 📖 Channel Registration & Linking Guide
+## 📖 Step-by-Step Guide: Linking Channels Between Servers
 
-### 🔧 Registration Requirements
-Before channels can be linked together, they must be properly registered:
+### 🚀 Quick Setup Instructions
 
-1. **Same User Registration**: All channels that you want to link together **must be registered by the same user**
-2. **Registrator Permissions**: Only users with Registrator+ permissions can register channels
-3. **One Registration Per User**: Each channel can only be registered by one user at a time
+#### 1. **Install the Bot on Both Servers**
+   - Invite HackBridge bot to both Discord servers where you want to link channels
+   - Ensure the bot has appropriate permissions (Send Messages, Manage Messages, etc.)
 
-### 🔗 Linking Process
+#### 2. **Set Up SuperAdmin (Server Admin Only)**
+   - In any public channel on your server, run: `/set_superadmin`
+   - ⚠️ **Only Discord server administrators can use this command**
+   - This gives you full control over the bot in your server
 
-#### Creating a New Channel Group
-1. **Register all channels** you want to link using `/register_channel` in each channel
-2. **Link the first pair** using `/link_channel <guild_id> <channel_id> <group_name>`
-3. **Add additional channels** to the group using `/link_channel_to_group <group_name>`
+#### 3. **Grant Permissions to Users from Other Servers**
+   - **Option A - Make them Admin**: `/set_admin <user>` (SuperAdmin only)
+   - **Option B - Make them Registrator**: `/set_registrator <user>` (Admin+ only)
+   - This allows users from other servers to register and link channels
 
-#### Adding to Existing Groups
-To add a new channel to an existing group:
-1. **Verify ownership**: All existing channels in the target group must be registered by you
-2. **Register the new channel** using `/register_channel`
-3. **Join the group** using `/link_channel_to_group <group_name>`
+#### 4. **Get Permissions on the Other Server**
+   - Ask the SuperAdmin or Admin from the other server to give you permissions:
+     - They should run `/set_admin <your_username>` or `/set_registrator <your_username>`
+   - You need at least Registrator permissions to register channels
+
+#### 5. **Register Channels**
+   - Go to the channel you want to link on **your server** and run: `/register_channel`
+   - Go to the channel you want to link on **the other server** and run: `/register_channel`
+   - ⚠️ **Important**: The same user must register all channels that will be linked together
+
+#### 6. **Link the Channels**
+   - In one of your registered channels, run:
+     ```
+     /link_channel <other_server_id> <other_channel_id> <group_name>
+     ```
+
+### 📝 Complete Example
+```
+Server A Admin: /set_superadmin
+Server A Admin: /set_registrator @UserFromServerB
+User goes to Server A Channel: /register_channel
+User goes to Server B Channel: /register_channel
+User in Server A Channel: /link_channel 123456789 987654321 "my-bridge-group"
+✅ Channels are now linked!
+```
 
 ### ⚠️ Important Notes
-- **Minimum Group Size**: Channel groups must contain at least 2 channels
-- **Maximum Flexibility**: Groups can span multiple Discord servers
-- **User Ownership**: You can only modify groups where you registered all participating channels
-- **Automatic Cleanup**: Registrator permissions are typically temporary and removed after linking
-
-### 📝 Step-by-Step Example
-```
-1. User registers Channel A: /register_channel (in Channel A)
-2. User registers Channel B: /register_channel (in Channel B)  
-3. User creates group: /link_channel <server_B_id> <channel_B_id> "my-group" (in Channel A)
-4. User registers Channel C: /register_channel (in Channel C)
-5. User adds to group: /link_channel_to_group "my-group" (in Channel C)
-```
+- **Same User Requirement**: All linked channels must be registered by the same user
+- **Minimum 2 Channels**: Groups need at least 2 channels to function
+- **Cross-Server Friendly**: You can link channels across any number of servers
+- **Temporary Permissions**: Registrator permissions are usually temporary and removed after linking
 
 ## 🏗️ Architecture
 
