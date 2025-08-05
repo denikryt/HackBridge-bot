@@ -118,13 +118,18 @@ async def get_or_create_webhook(target_channel):
     return webhook
 
 def form_header(message: discord.Message, guild_name: str, channel_group_len: int) -> str:
-    user_name = message.author.display_name
-    nickname = f"{emoji.emojize(random.choice(config.AVATAR_EMOJIS))} **{user_name}**"
-    guild_name = f"{emoji.emojize(':loud_sound:')}_**{guild_name}**_"
+    user_name = message.author.name
+    user_id = message.author.id
+    guild_id = message.guild.id
 
-    if channel_group_len == 2:
-        header = nickname
-    else:
-        header = f"{nickname} {guild_name}"
-        
+    # Ссылка на профиль (оборачиваем в < > — чтобы не было preview)
+    user_link = f"<https://discord.com/users/{user_id}>"
+    nickname = f"{emoji.emojize(random.choice(config.AVATAR_EMOJIS))} **[{user_name}]({user_link})**"
+
+    # Ссылка на сервер (тоже без preview)
+    guild_link = f"<https://discord.com/channels/{guild_id}>"
+    guild_name_formatted = f"{emoji.emojize(':loud_sound:')} _**[{guild_name}]({guild_link})**_"
+
+    header = f"{nickname} {guild_name_formatted}"
+
     return header
