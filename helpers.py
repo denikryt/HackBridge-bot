@@ -118,7 +118,14 @@ async def get_or_create_webhook(target_channel):
     return webhook
 
 def form_header(message: discord.Message, guild_name: str, channel_group_len: int) -> str:
-    user_name = message.author.name
+    user_name = message.author.display_name
+    # Remove emojis from user name
+    user_name = emoji.demojize(user_name)
+    # Remove emoji codes (pattern :emoji_name:)
+    import re
+    user_name = re.sub(r':[a-zA-Z0-9_+-]+:', '', user_name)
+    user_name = user_name.strip()  # Remove any extra whitespace
+    
     user_id = message.author.id
     guild_id = message.guild.id
 
