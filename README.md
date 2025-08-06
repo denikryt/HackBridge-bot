@@ -1,114 +1,85 @@
 # 🌉 HackBridge Bot
 
-A powerful Discord bot that creates seamless message bridges between multiple Discord servers and channels, enabling cross-server communication with advanced permission management and message tracking.
+A Discord bot that creates seamless message bridges between multiple servers and channels, enabling cross-server communication with advanced permission management.
 
-Originally created for the Kyiv Hackerspace Discord community to facilitate communication across multiple servers and channels with other communities. 
+Originally created for the Kyiv Hackerspace Discord community.
 
-## ⚠️ Important Disclaimers
+## ⚠️ Important Notes
 
-- **⚠️ Development Status**: This project is currently under active development. Features may change and bugs may occur.
-- **🚫 Multiple Instances**: Running two instances of this bot on the same server may cause conflicts. Only one instance per server is recommended.
-- **🔒 Data Privacy**: Only message IDs are stored in the database for tracking purposes. Message content is never stored server-side.
-- **📊 Database Storage**: The bot only stores message relationship data (IDs, channel mappings) - no actual message content is persisted.
+- **Development Status**: Currently under active development
+- **Single Instance**: Only run one instance per server to avoid conflicts
+- **Privacy**: Only message IDs are stored - no message content is persisted
 
 ## ✨ Features
 
 ### 🔗 Channel Linking & Message Forwarding
 - **Multi-Server Communication**: Link channels across different Discord servers
-- **Group Management**: Create and manage groups of linked channels
 - **Real-time Forwarding**: Messages are instantly forwarded to all linked channels
-- **Reply & Thread Support**: Intelligent handling of message replies and Discord threads
-  - **Cross-Server Replies**: Replies to messages are properly linked across all connected channels
-  - **Thread Forwarding**: Messages from Discord threads are forwarded with thread context
-  - **Reply Chain Preservation**: Maintains conversation flow and reply relationships
+- **Reply & Thread Support**: Maintains conversation flow and reply relationships across servers
 - **Rich Content Support**: Forwards text, images, attachments, and embeds
-- **Message Synchronization**: 
-  - **Edit Tracking**: When a message is edited in one channel, all linked copies are automatically updated
-  - **Delete Synchronization**: When a message is deleted in one channel, all linked copies are removed
-  - **Cross-Server Consistency**: Maintains message state consistency across all linked channels
+- **Message Synchronization**: Edit and delete tracking across all linked channels
 
-### 👑 Advanced Permission System
-- **SuperAdmin**: Full bot control with server administrator privileges
-- **Admin**: Manage registrators and channel operations within their server
+### � Smart Message Headers
+- **User & Guild Links**: Clickable links to the original user and server in message headers
+- **Custom Avatars**: Set personalized avatars using `/set_my_avatar` command
+- **Guild Identification**: Clear display of message origin server
+
+### � Permission System
+- **SuperAdmin**: Full bot control (server administrators only)
+- **Admin**: Manage users and channels within their server
 - **Registrator**: Temporary role for channel registration and linking
-- **Granular Permissions**: Fine-grained control over bot operations
-
-### 📊 Message Tracking & Database
-- **MongoDB Integration**: Persistent storage of message relationships
-- **Message Grouping**: Track related messages across linked channels
-- **Reply Tracking**: Maintain message thread integrity across servers
-
-### 🔄 Real-time Message Synchronization
-- **Automatic Edit Propagation**: When users edit their messages, changes are instantly reflected across all linked channels
-- **Synchronized Deletions**: Deleting a message removes it from all connected channels simultaneously
-- **Thread-Aware Operations**: Supports edit and delete operations within Discord threads
-- **Intelligent Filtering**: Ignores bot messages and webhook messages to prevent loops
-- **Error Handling**: Gracefully handles permission issues and missing messages across servers
-- **Database Cleanup**: Automatically maintains database integrity by removing orphaned message entries
-
-### 🎨 Customizable Appearance
-- **Random Avatar Emojis**: Fun, randomized emoji avatars for forwarded messages
-- **Guild Identification**: Clear headers showing message origin
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.8+
 - Discord Bot Token
-- MongoDB database (optional but recommended)
+- MongoDB (optional but recommended)
 
 ### Installation
 
-1. **Clone the repository**
+1. Clone and install:
    ```bash
    git clone https://github.com/yourusername/HackBridge-bot.git
    cd HackBridge-bot
-   ```
-
-2. **Install dependencies**
-   ```bash
    pip install -r requirements.txt
    ```
 
-3. **Set up environment variables**
-   Create a `.env` file in the project root:
+2. Create `.env` file:
    ```env
    token=YOUR_DISCORD_BOT_TOKEN
    mongodb_uri=YOUR_MONGODB_CONNECTION_STRING
    ```
 
-4. **Run the bot**
+3. Run:
    ```bash
    python main.py
    ```
 
-## 📋 Commands Reference
+## 📋 Commands
 
-### 🔧 Channel Management
-
+### Channel Management
 | Command | Description | Permissions |
 |---------|-------------|-------------|
-| `/register_channel` | Register current channel for message forwarding | Registrator+ |
+| `/register_channel` | Register current channel for forwarding | Registrator+ |
+| `/remove_channel_registration` | Remove channel from registration | Registrator+ |
 | `/show_registered_channels` | Display all registered channels | Any user |
-| `/remove_channel_registration` | Remove current channel from registration | Registrator+ |
 
-### 🔗 Channel Linking
-
+### Channel Linking
 | Command | Description | Permissions |
 |---------|-------------|-------------|
-| `/link_channel <guild_id> <channel_id> <group_name>` | Link current channel with another server's channel | Registrator+ |
-| `/link_channel_to_group <group_name>` | Add current channel to existing group | Registrator+ |
-| `/show_linked_channels` | Show channels linked to current channel | Any user |
-| `/unlink_channel` | Remove current channel from its group | Registrator+ |
+| `/link_channel <guild_id> <channel_id> <group_name>` | Link channel with another server | Registrator+ |
+| `/link_channel_to_group <group_name>` | Add channel to existing group | Registrator+ |
+| `/show_linked_channels` | Show linked channels | Any user |
+| `/unlink_channel` | Remove channel from group | Registrator+ |
 
-### 👥 User Management
-
+### User Management
 | Command | Description | Permissions |
 |---------|-------------|-------------|
-| `/set_superadmin` | Set yourself as superadmin (server admin only) | Server Admin |
-| `/set_admin <user>` | Grant admin permissions to a user | SuperAdmin |
-| `/set_registrator <user>` | Grant temporary registrator permissions | Admin+ |
-| `/show_admins` | Display all bot admins in current server | Any user |
+| `/set_superadmin` | Set yourself as superadmin | Server Admin |
+| `/set_admin <user>` | Grant admin permissions | SuperAdmin |
+| `/set_registrator <user>` | Grant registrator permissions | Admin+ |
+| `/show_admins` | Display all bot admins | Any user |
 | `/remove_admin <user_id>` | Remove admin permissions | SuperAdmin |
 | `/remove_registrator <user_id>` | Remove registrator permissions | Admin+ |
 
@@ -147,13 +118,13 @@ Originally created for the Kyiv Hackerspace Discord community to facilitate comm
      /link_channel <other_server_id> <other_channel_id> <group_name>
      ```
 
-### 📝 Complete Example
+### Example
 ```
 Server A Admin: /set_superadmin
-Server A Admin: /set_registrator @UserFromServerB
-User goes to Server A Channel: /register_channel
-User goes to Server B Channel: /register_channel
-User in Server A Channel: /link_channel 123456789 987654321 "my-bridge-group"
+Server A Admin: /set_registrator @UserB
+UserB in Server A: /register_channel
+UserB in Server B: /register_channel
+UserB in Server A: /link_channel 123456789 987654321 "my-bridge"
 ✅ Channels are now linked!
 ```
 
@@ -163,104 +134,16 @@ User in Server A Channel: /link_channel 123456789 987654321 "my-bridge-group"
 - **Cross-Server Friendly**: You can link channels across any number of servers
 - **Temporary Permissions**: Registrator permissions are usually temporary and removed after linking
 
-## 🏗️ Architecture
 
-### File Structure
-```
-HackBridge-bot/
-├── main.py                 # Bot entry point and event handlers
-├── commands.py             # Slash command implementations
-├── messages.py             # Message forwarding logic
-├── message_edits.py        # Message edit synchronization
-├── message_deletes.py      # Message deletion synchronization
-├── helpers.py              # Utility functions
-├── roles.py                # Permission system classes
-├── database.py             # MongoDB operations
-├── config.py               # Configuration and constants
-├── logger_config.py        # Logging configuration
-├── requirements.txt        # Python dependencies
-├── avatar.png              # Bot avatar image
-├── roles.json              # User roles storage
-├── registered.json         # Channel registration data
-├── linked_channels.json    # Channel linking configuration
-└── logs/                   # Application logs
-    └── bot.log
-```
+### Data Storage
+- **JSON Files**: User roles, channel registration, linking configuration
+- **MongoDB**: Message relationships for reply tracking (no content stored)
 
-### Permission Hierarchy
-```
-SuperAdmin (Server Administrator)
-    ├── Full bot control
-    ├── Can set/remove admins
-    ├── Cannot be set as admin/registrator
-    └── All admin permissions
-
-Admin (Set by SuperAdmin)
-    ├── Manage registrators
-    ├── Channel operations
-    ├── Cannot be set as registrator
-    └── All registrator permissions
-
-Registrator (Temporary, set by Admin+)
-    ├── Register channels
-    ├── Link/unlink channels
-    └── Limited to own registered channels
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-- `token`: Your Discord bot token
-- `mongodb_uri`: MongoDB connection string (optional)
-
-### Config Options (`config.py`)
-- `AVATAR_EMOJIS`: List of emoji options for message avatars
-- `DB_NAME`: MongoDB database name
-
-## 🗃️ Data Storage
-
-### JSON Files
-- **`roles.json`**: Stores user permissions and roles
-- **`registered.json`**: Tracks registered channels
-- **`linked_channels.json`**: Manages channel group configurations
-
-### MongoDB Collections
-- Dynamic collections created per channel group
-- Stores only message IDs and relationships for reply tracking
-- Enables cross-server message threading without storing content
-- **No message content is stored** - only metadata for linking purposes
-
-## 🔐 Security Features
-
-- **Permission-based access control**
-- **User action logging**
-- **Server isolation** (admins only manage their own servers)
-- **Temporary registrator system** (automatically removed after linking)
-- **Channel ownership validation**
-- **Message integrity protection** (prevents unauthorized edits/deletes from other bots)
-- **Loop prevention** (ignores bot and webhook messages to prevent infinite loops)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-If you encounter any issues or have questions:
-
-1. Check the bot logs in `logs/bot.log`
-2. Verify your permissions in the server
-3. Ensure all required channels are properly registered
-4. Open an issue on GitHub with detailed information
+### Security
+- Permission-based access control
+- Server isolation (admins only manage their own servers)
+- Loop prevention (ignores bot/webhook messages)
 
 ---
 
-Made with ❤️ for seamless Discord server communication
+Made with ❤️ for seamless Discord communication
