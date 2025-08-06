@@ -80,3 +80,53 @@ def delete_message_group_entry_by_message_id(message_id: str, group_name: str):
     else:
         logger.info(f"No entry found to delete for message ID: {message_id} in group: {group_name}")
         return False
+
+def set_user_avatar(user_id: str, emoji_avatar: str):
+    """Set emoji avatar for a user."""
+    if not type(user_id) is str:
+        user_id = str(user_id)
+
+    collection = db[config.AVATAR_COLLECTION_NAME]
+    # Upsert - update if exists, insert if not
+    result = collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"user_id": user_id, "emoji_avatar": emoji_avatar}},
+        upsert=True
+    )
+    
+    if result.upserted_id:
+        logger.info(f"Created new avatar entry for user {user_id}: {emoji_avatar}")
+    else:
+        logger.info(f"Updated avatar for user {user_id}: {emoji_avatar}")
+    
+    return True
+
+def get_user_avatar(user_id: str):
+    """Get emoji avatar for a user."""
+    if not type(user_id) is str:
+        user_id = str(user_id)
+
+    collection = db[config.AVATAR_COLLECTION_NAME]
+    result = collection.find_one({"user_id": user_id})
+    
+    if result:
+        logger.debug(f"Found avatar for user {user_id}: {result['emoji_avatar']}")
+        return result["emoji_avatar"]
+    else:
+        logger.debug(f"No avatar found for user {user_id}")
+        return None
+
+def delete_user_avatar(user_id: str):
+    """Delete emoji avatar for a user."""
+    if not type(user_id) is str:
+        user_id = str(user_id)
+
+    collection = db[config.AVATAR_COLLECTION_NAME]
+    result = collection.delete_one({"user_id": user_id})
+    
+    if result.deleted_count > 0:
+        logger.info(f"Deleted avatar for user {user_id}")
+        return True
+    else:
+        logger.info(f"No avatar found to delete for user {user_id}")
+        return False

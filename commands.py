@@ -5,6 +5,7 @@ import json
 from roles import SuperAdmin, Admin, Registrator
 import helpers
 from logger_config import get_logger
+import database
 
 # Set up logger for commands module
 logger = get_logger(__name__)
@@ -1006,3 +1007,77 @@ def setup(bot):
             f"Channel **{interaction.channel.name}** has been linked to the group **{group_name}**.",
             ephemeral=True
         )
+
+    @bot.tree.command(name="set_my_avatar", description="Set an emoji as your avatar for bridged messages")
+    @app_commands.describe(emoji="The emoji you want to use as your avatar")
+    async def set_my_avatar(interaction: discord.Interaction, emoji: str):
+        '''Set an emoji as your avatar for bridged messages'''
+        logger.info(f"set_my_avatar command invoked by {interaction.user.display_name} ({interaction.user.id}) with emoji: {emoji}")
+
+        # Validate that the input is a single emoji (Unicode or Discord custom emoji)
+        if not helpers.validate_single_emoji(emoji):
+            await interaction.response.send_message("Please provide only one emoji as your avatar.", ephemeral=True)
+            return
+        
+        try:
+            # Set the user's avatar in the database
+            database.set_user_avatar(str(interaction.user.id), emoji)
+            logger.info(f"Successfully set avatar {emoji} for user {interaction.user.display_name} ({interaction.user.id})")
+            
+            await interaction.response.send_message(
+                f"Your avatar has been set to {emoji}! This emoji will now appear in the header of your bridged messages.",
+                ephemeral=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to set avatar for user {interaction.user.display_name} ({interaction.user.id}): {e}")
+            await interaction.response.send_message("An error occurred while setting your avatar. Please try again.", ephemeral=True)
+
+    @bot.tree.command(name="remove_my_avatar", description="Remove your custom avatar and use random emoji instead")
+    async def remove_my_avatar(interaction: discord.Interaction):
+        '''Remove your custom avatar and use random emoji instead'''
+        logger.info(f"remove_my_avatar command invoked by {interaction.user.display_name} ({interaction.user.id})")
+
+        try:
+            import database
+            # Check if user has an avatar to remove
+            current_avatar = database.get_user_avatar(str(interaction.user.id))
+            if not current_avatar:
+                await interaction.response.send_message("You don't have a custom avatar set.", ephemeral=True)
+                return
+            
+            # Remove the user's avatar from the database
+            success = database.delete_user_avatar(str(interaction.user.id))
+            if success:
+                logger.info(f"Successfully removed avatar for user {interaction.user.display_name} ({interaction.user.id})")
+                await interaction.response.send_message(
+                    "Your custom avatar has been removed. Default emoji will now be used in your bridged messages.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message("Failed to remove your avatar. Please try again.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Failed to remove avatar for user {interaction.user.display_name} ({interaction.user.id}): {e}")
+            await interaction.response.send_message("An error occurred while removing your avatar. Please try again.", ephemeral=True)
+
+    @bot.tree.command(name="show_my_avatar", description="Show your current avatar emoji")
+    async def show_my_avatar(interaction: discord.Interaction):
+        '''Show your current avatar emoji'''
+        logger.info(f"show_my_avatar command invoked by {interaction.user.display_name} ({interaction.user.id})")
+
+        try:
+            import database
+            # Get the user's current avatar
+            user_avatar = database.get_user_avatar(str(interaction.user.id))
+            if user_avatar:
+                await interaction.response.send_message(
+                    f"Your current avatar is: {user_avatar}",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "You don't have a custom avatar set. The default emoji is being used for your bridged messages.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            logger.error(f"Failed to get avatar for user {interaction.user.display_name} ({interaction.user.id}): {e}")
+            await interaction.response.send_message("An error occurred while retrieving your avatar. Please try again.", ephemeral=True)

@@ -9,6 +9,8 @@ load_dotenv(dotenv_path=env_path)
 TOKEN = os.environ.get("token")
 MONGODB_URI = os.environ.get("mongodb_uri")
 DB_NAME = "HackBridge"
+AVATAR_COLLECTION_NAME = os.environ.get("avatar_collection_name")
+DEFAULT_AVATAR = ":monkey_face:"
 
 AVATAR_EMOJIS = [
     ":monkey_face:", ":monkey:", ":gorilla:", ":orangutan:", ":dog:", ":guide_dog:", ":service_dog:", 
