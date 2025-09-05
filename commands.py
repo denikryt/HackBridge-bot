@@ -1149,4 +1149,4 @@ def setup(bot):
                 await interaction.response.send_message("An error occurred while saving updated invite links.", ephemeral=True)
                 return
 
-        await interaction.response.send_message(msg, ephemeral=True)
+            await interaction.response.send_message(msg, ephemeral=True)
