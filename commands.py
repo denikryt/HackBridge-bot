@@ -13,67 +13,7 @@ logger = get_logger(__name__)
 
 
 def setup(bot):
-    @bot.tree.command(name="update_invites", description="Regenerate and update invite links for all linked channels in a group")
-    async def update_invites(interaction: discord.Interaction):
-        '''Regenerate and update invite links for every linked channel in a group, regardless of existing data.'''
-        logger.info(f"update_invites command invoked by {interaction.user.display_name} ({interaction.user.id})")
 
-        try:
-            linked_channels = commands_helpers.load_linked_channels()
-        except Exception as e:
-            logger.error(f"Failed to load linked channels: {e}")
-            await interaction.response.send_message("An error occurred while loading linked channels data.", ephemeral=True)
-            return
-
-        # Find the group containing the current channel using helper
-        group = commands_helpers.get_group_by_channel(linked_channels, str(interaction.guild.id), str(interaction.channel.id))
-
-        if not group:
-            await interaction.response.send_message("This channel is not part of any linked channels group.", ephemeral=True)
-            return
-
-        updated = False
-        msg = f"Invite links for group **{group.get('group_name')}** regenerated and updated:\n"
-        failed_guilds = []
-        for link in group.get("links", []):
-            channel_id = link.get("channel_id")
-            guild_id = link.get("guild_id")
-            channel_obj = None
-            guild_obj = bot.get_guild(int(guild_id)) if guild_id else None
-            if guild_obj:
-                channel_obj = guild_obj.get_channel(int(channel_id)) if channel_id else None
-            if channel_obj:
-                new_invite = await commands_helpers.create_invite(channel_obj)
-                if new_invite:
-                    # Always update or create the invite_url entry
-                    link["invite_url"] = new_invite
-                    updated = True
-                    msg += f"→ [{link.get('guild_name')}]({new_invite}) | #**{link.get('channel_name')}** (updated)\n"
-                else:
-                    msg += f"→ [{link.get('guild_name')}] | #**{link.get('channel_name')}** (failed to create)\n"
-                    failed_guilds.append(link.get('guild_name'))
-            else:
-                # If channel not found, but invite_url doesn't exist, do not create
-                msg += f"→ [{link.get('guild_name')}] | #**{link.get('channel_name')}** (channel not found)\n"
-                failed_guilds.append(link.get('guild_name'))
-
-        # Send additional ephemeral message for guilds where invite link was not created
-        if failed_guilds:
-            await interaction.followup.send(
-                f"Invite link was not created for the following guilds: {', '.join(set(failed_guilds))}",
-                ephemeral=True
-            )
-
-        if updated:
-            try:
-                commands_helpers.save_json_file("linked_channels.json", linked_channels)
-                logger.info(f"Updated invite links for group {group.get('group_name')}")
-            except Exception as e:
-                logger.error(f"Failed to save linked channels data: {e}")
-                await interaction.response.send_message("An error occurred while saving updated invite links.", ephemeral=True)
-                return
-
-        await interaction.response.send_message(msg, ephemeral=True)
     # ------------------------------------------
     # Functions for autocompletion
     # ------------------------------------------
@@ -1148,3 +1088,65 @@ def setup(bot):
                 msg += f"→ [{link.get('guild_name')}] | #**{link.get('channel_name')}** (No invite found)\n"
 
         await interaction.response.send_message(msg)
+
+    @bot.tree.command(name="update_invites", description="Regenerate and update invite links for all linked channels in a group")
+    async def update_invites(interaction: discord.Interaction):
+        '''Regenerate and update invite links for every linked channel in a group, regardless of existing data.'''
+        logger.info(f"update_invites command invoked by {interaction.user.display_name} ({interaction.user.id})")
+
+        try:
+            linked_channels = commands_helpers.load_linked_channels()
+        except Exception as e:
+            logger.error(f"Failed to load linked channels: {e}")
+            await interaction.response.send_message("An error occurred while loading linked channels data.", ephemeral=True)
+            return
+
+        # Find the group containing the current channel using helper
+        group = commands_helpers.get_group_by_channel(linked_channels, str(interaction.guild.id), str(interaction.channel.id))
+
+        if not group:
+            await interaction.response.send_message("This channel is not part of any linked channels group.", ephemeral=True)
+            return
+
+        updated = False
+        msg = f"Invite links for group **{group.get('group_name')}** regenerated and updated:\n"
+        failed_guilds = []
+        for link in group.get("links", []):
+            channel_id = link.get("channel_id")
+            guild_id = link.get("guild_id")
+            channel_obj = None
+            guild_obj = bot.get_guild(int(guild_id)) if guild_id else None
+            if guild_obj:
+                channel_obj = guild_obj.get_channel(int(channel_id)) if channel_id else None
+            if channel_obj:
+                new_invite = await commands_helpers.create_invite(channel_obj)
+                if new_invite:
+                    # Always update or create the invite_url entry
+                    link["invite_url"] = new_invite
+                    updated = True
+                    msg += f"→ [{link.get('guild_name')}]({new_invite}) | #**{link.get('channel_name')}** (updated)\n"
+                else:
+                    msg += f"→ [{link.get('guild_name')}] | #**{link.get('channel_name')}** (failed to create)\n"
+                    failed_guilds.append(link.get('guild_name'))
+            else:
+                # If channel not found, but invite_url doesn't exist, do not create
+                msg += f"→ [{link.get('guild_name')}] | #**{link.get('channel_name')}** (channel not found)\n"
+                failed_guilds.append(link.get('guild_name'))
+
+        # Send additional ephemeral message for guilds where invite link was not created
+        if failed_guilds:
+            await interaction.response.send(
+                f"Invite link was not created for the following guilds: {', '.join(set(failed_guilds))}",
+                ephemeral=True
+            )
+
+        if updated:
+            try:
+                commands_helpers.save_json_file("linked_channels.json", linked_channels)
+                logger.info(f"Updated invite links for group {group.get('group_name')}")
+            except Exception as e:
+                logger.error(f"Failed to save linked channels data: {e}")
+                await interaction.response.send_message("An error occurred while saving updated invite links.", ephemeral=True)
+                return
+
+        await interaction.response.send_message(msg, ephemeral=True)
