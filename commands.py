@@ -1135,7 +1135,7 @@ def setup(bot):
 
         # Send additional ephemeral message for guilds where invite link was not created
         if failed_guilds:
-            await interaction.response.send(
+            await interaction.response.send_message(
                 f"Invite link was not created for the following guilds: {', '.join(set(failed_guilds))}",
                 ephemeral=True
             )
