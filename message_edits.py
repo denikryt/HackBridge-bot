@@ -55,7 +55,7 @@ async def handle_channel_message_edit(bot, before: discord.Message, after: disco
     # Form new header and content for the edited message
     guild_name = after.guild.name if after.guild else "Unknown Guild"
     header = helpers.form_header(after, guild_name, len(target_channel_ids))
-    new_msg = f"{header}\n{after.content}" if after.content else header
+    new_msg = f"{header}{after.content}" if after.content else header
     
     edited_count = 0
     # Update the message in each linked channel

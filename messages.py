@@ -45,7 +45,7 @@ async def handle_message(bot, message: discord.Message, from_reply=False):
     guild_name = message.guild.name if message.guild else "Unknown Guild"
     # Form header for the message
     header = helpers.form_header(message, guild_name, len(target_channel_ids))
-    msg = f"{header}\n{message.content}" if message.content else header
+    msg = f"{header}{message.content}" if message.content else header
 
     for target_channel_id in target_channel_ids:
         target_channel = bot.get_channel(int(target_channel_id))
