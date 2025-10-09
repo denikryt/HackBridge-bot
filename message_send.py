@@ -2,30 +2,12 @@ import discord
 import helpers
 import database
 from logger_config import get_logger
+import json
 
 logger = get_logger(__name__)
 
-async def handle_message(bot, message: discord.Message, from_reply=False):
+async def handle_message(bot, message: discord.Message):
     """Handles incoming messages and forwards them to linked channels."""
-
-    # Ignore messages from the bot itself
-    if message.author == bot.user:
-        return
-    
-    # Ignore messages from webhooks
-    if message.webhook_id:
-        return
-    
-    # Check if the message is in a thread
-    if isinstance(message.channel, discord.Thread) and not from_reply:
-        print(f"Handling message in thread", message.content)
-        await handle_thread_message(bot, message)
-        return
-    
-    # Check if the message is a reply
-    if message.reference and not from_reply:
-        await handle_reply_message(bot, message)
-        return
 
     # Try to find linked channels
     target_channel_ids = helpers.find_linked_channels(str(message.channel.id))
@@ -45,7 +27,7 @@ async def handle_message(bot, message: discord.Message, from_reply=False):
     guild_name = message.guild.name if message.guild else "Unknown Guild"
     # Form header for the message
     header = helpers.form_header(message, guild_name, len(target_channel_ids))
-    msg = f"{header}{message.content}" if message.content else header
+    msg = f"{header}\n{message.content}" if message.content else header
 
     for target_channel_id in target_channel_ids:
         target_channel = bot.get_channel(int(target_channel_id))
@@ -85,31 +67,8 @@ async def handle_message(bot, message: discord.Message, from_reply=False):
 
 async def handle_thread_message(bot, message: discord.Message):
     """Handles messages in threads and forwards them to linked channels."""
-
-    # Check thread creation event 
-    if not message.content:
-        return 
-
-    # Ignore messages from the bot itself
-    if message.author == bot.user:
-        return
-    
-    # Ignore messages from webhooks
-    if message.webhook_id:
-        return
     
     logger.info(f"Handling thread message from {message.author} in thread {message.channel.name}")
-    
-    # Check if the message is in a thread
-    if not isinstance(message.channel, discord.Thread):
-        handle_message(bot, message)
-        return
-    
-    # Check if message in thread is a reply
-    if message.reference:
-        logger.info(f"Message in thread {message.channel.name} is a reply, handling as reply message")
-        await handle_reply_message(bot, message)
-        return
 
     # Get the parent channel ID
     parent_channel_id = str(message.channel.parent_id)
@@ -199,25 +158,6 @@ async def handle_thread_message(bot, message: discord.Message):
     except Exception as e:
         logger.error(f"Failed to save thread message group entry: {e}")
 
-async def handle_reply_message(bot, message: discord.Message):
-    """Handles reply messages and forwards them to linked channels."""
-
-    # Ignore messages from the bot itself
-    if message.author == bot.user:
-        return
-    
-    # Ignore messages from webhooks
-    if message.webhook_id:
-        return
-    
-    logger.info(f"Handling reply message from {message.author}")
-    
-    # Check if the message is in a thread and handle accordingly
-    if isinstance(message.channel, discord.Thread):
-        await handle_reply_message_in_thread(bot, message)
-    else:
-        await handle_reply_message_in_channel(bot, message)
-
 async def handle_reply_message_in_channel(bot, message: discord.Message):
     """Handles reply messages in general channels and forwards them to linked channels."""
     
@@ -236,7 +176,7 @@ async def handle_reply_message_in_channel(bot, message: discord.Message):
     
     if not referenced_message_entry:
         logger.warning(f"No message group entry found for referenced message {referenced_message_id}, treating as regular message")
-        await handle_message(bot, message, from_reply=True)
+        await handle_message(bot, message)
         return
 
     # Form first message entry
@@ -257,9 +197,12 @@ async def handle_reply_message_in_channel(bot, message: discord.Message):
         if target_channel:
             # Get referenced message id for the target channel
             target_referenced_message_id = None
-            
+
             for entry in referenced_message_entry:
+                # print(f'--->entry:\n{json.dumps(entry, indent=2, ensure_ascii=False)}')
+
                 if entry["guild_id"] == target_guild_id and entry["channel_id"] == target_channel_id:
+                    logger.info(f"Found entry for target channel {target_channel_id} in message group entry")
                     target_referenced_message_id = entry["message_id"]
                     break
                 else:
@@ -306,6 +249,7 @@ async def handle_reply_message_in_channel(bot, message: discord.Message):
 async def handle_reply_message_in_thread(bot, message: discord.Message):
     """Handles reply messages in threads and forwards them to linked channels."""
     
+    logger.info(f"Handling reply message in thread from {message.author}")
     # For thread messages, use the parent channel ID
     parent_channel_id = str(message.channel.parent_id)
     target_channel_ids = helpers.find_linked_channels(parent_channel_id)
@@ -322,7 +266,7 @@ async def handle_reply_message_in_thread(bot, message: discord.Message):
     
     if not referenced_message_entry:
         logger.warning(f"No message group entry found for referenced message {referenced_message_id}, treating as regular message")
-        await handle_message(bot, message, from_reply=True)
+        await handle_message(bot, message)
         return
 
     # Form first message entry
@@ -407,3 +351,9 @@ async def handle_reply_message_in_thread(bot, message: discord.Message):
         logger.info(f"Thread reply message successfully forwarded and saved")
     except Exception as e:
         logger.error(f"Failed to save reply message group entry: {e}") 
+
+
+
+# -->message: <Message id=1425894368836849796 channel=<TextChannel id=1279822661194879101 name='основной' position=0 nsfw=False news=False category_id=1279822661194879099> type=<MessageType.reply: 19> author=<Member id=231855055601532938 name='choikak' global_name='choikak🥚' bot=False nick=None guild=<Guild id=1279822661194879098 name='Сервер1' shard_id=0 chunked=False member_count=4>> flags=<MessageFlags value=0>>
+
+# -->message: <Message id=1425894424939860088 channel=<TextChannel id=1279822661194879101 name='основной' position=0 nsfw=False news=False category_id=1279822661194879099> type=<MessageType.default: 0> author=<Member id=231855055601532938 name='choikak' global_name='choikak🥚' bot=False nick=None guild=<Guild id=1279822661194879098 name='Сервер1' shard_id=0 chunked=False member_count=4>> flags=<MessageFlags value=16384>>

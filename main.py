@@ -5,9 +5,9 @@ import json
 import logging
 from config import TOKEN
 import commands as command_module
-import messages as message_module
-import message_edits as message_edit_module
-import message_deletes as message_delete_module
+import message_edit
+import message_delete
+from message_worker import MessageWorker
 from logger_config import setup_logging, get_logger
 
 # Setup logging before anything else
@@ -20,6 +20,7 @@ intents.guilds = True
 intents.messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+message_worker = MessageWorker(bot)
 
 # Create files if they do not exist
 def create_files():
@@ -55,16 +56,16 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    await message_module.handle_message(bot, message)
+    await message_worker.process_message(message)
     await bot.process_commands(message)
 
 @bot.event
 async def on_message_edit(before, after):
-    await message_edit_module.handle_message_edit(bot, before, after)
+    await message_edit.handle_message_edit(bot, before, after)
 
 @bot.event
 async def on_message_delete(message):
-    await message_delete_module.handle_message_delete(bot, message)
+    await message_delete.handle_message_delete(bot, message)
 
 @bot.event
 async def on_command_error(ctx, error):
