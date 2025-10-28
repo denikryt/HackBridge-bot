@@ -48,6 +48,7 @@ class MessageWorker:
             else:
                 if message.reference:
                     if message.reference.type == discord.MessageReferenceType.forward:
+                        # Forward message
                         logger.info(f"Processing forward message from {message.author} in {message.channel.name}")
                         await message_forward.handle_forward_message(self.bot, message)
                     else:

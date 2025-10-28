@@ -27,7 +27,7 @@ async def handle_message(bot, message: discord.Message):
     guild_name = message.guild.name if message.guild else "Unknown Guild"
     # Form header for the message
     header = helpers.form_header(message, guild_name, len(target_channel_ids))
-    msg = f"{header}\n{message.content}" if message.content else header
+    msg = helpers.form_message_text(header, message.content)
 
     for target_channel_id in target_channel_ids:
         target_channel = bot.get_channel(int(target_channel_id))
@@ -95,7 +95,7 @@ async def handle_thread_message(bot, message: discord.Message):
     
     # Form header for the thread message
     header = helpers.form_header(message, guild_name, len(target_channel_ids))
-    msg = f"{header}\n{message.content}" if message.content else f"{header}"
+    msg = helpers.form_message_text(header, message.content)
 
     thread_message_entry = database.get_message_group_entry_by_message_id(message.channel.id, group_name)
     

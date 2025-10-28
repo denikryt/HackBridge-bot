@@ -165,6 +165,10 @@ def form_header(message: discord.Message, guild_name: str, channel_group_len: in
 
     return header
 
+def form_message_text(header, text):
+    """Forms the complete message text with header and content."""
+    return f"{header}{text}" if text else header
+
 def validate_single_emoji(emoji_string: str) -> bool:
     """
     Validate that the input is a single emoji (Unicode or Discord custom emoji).
