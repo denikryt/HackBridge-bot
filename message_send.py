@@ -189,7 +189,7 @@ async def handle_reply_message_in_channel(bot, message: discord.Message):
     guild_name = message.guild.name if message.guild else "Unknown Guild"
     # Form header for the message
     header = helpers.form_header(message, guild_name, len(target_channel_ids))
-    msg = f"{header}\n{message.content}" if message.content else header
+    msg = helpers.form_message_text(header, message.content)
         
     for target_channel_id in target_channel_ids:
         target_channel = bot.get_channel(int(target_channel_id))
@@ -280,7 +280,7 @@ async def handle_reply_message_in_thread(bot, message: discord.Message):
     guild_name = message.guild.name if message.guild else "Unknown Guild"
     # Form header for the message
     header = helpers.form_header(message, guild_name, len(target_channel_ids))
-    msg = f"{header}\n{message.content}" if message.content else header
+    msg = helpers.form_message_text(header, message.content)
         
     for target_channel_id in target_channel_ids:
         target_channel = bot.get_channel(int(target_channel_id))
