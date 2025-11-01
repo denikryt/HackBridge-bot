@@ -36,10 +36,18 @@ async def handle_message(bot, message: discord.Message):
             
            # Send the message to the target channel
             try:
+                # Process attachments and stickers
+                files = await helpers.process_attachments(message)
+                global_stickers, guild_sticker_files = await helpers.process_stickers(message)
+
+                # Merge attachments + guild-native sticker files
+                files += guild_sticker_files
+
                 result = await target_channel.send(
                     content=msg,
                     embed=message.embeds[0] if message.embeds else None,
-                    files=[await file.to_file() for file in message.attachments]
+                    files=files if files else None,
+                    stickers=global_stickers if global_stickers else None
                 )
                 logger.debug(f"Message forwarded to {target_channel.guild.name}#{target_channel.name}")
             except Exception as e:
@@ -120,19 +128,34 @@ async def handle_thread_message(bot, message: discord.Message):
                 parent_text = parent_message.content
                 thread_name = " ".join(parent_text.split()[:5])
 
+                # Process attachments and stickers
+                files = await helpers.process_attachments(message)
+                global_stickers, guild_sticker_files = await helpers.process_stickers(message)
+
+                # Merge attachments + guild-native sticker files
+                files += guild_sticker_files
+
                 if parent_message.thread:
                     target_thread = parent_message.thread
-                    result = await target_thread.send(content=msg)
+                    result = await target_thread.send(
+                        content=msg,
+                        embed=message.embeds[0] if message.embeds else None,
+                        files=files if files else None,
+                        stickers=global_stickers if global_stickers else None
+                    )
                 else:
                     try:
                         thread = await parent_message.create_thread(
                             name=f"{thread_name}",
                         )
-                        result = await thread.send(content=msg)
+                        result = await thread.send(
+                            content=msg,
+                            embed=message.embeds[0] if message.embeds else None,
+                            files=files if files else None,
+                            stickers=global_stickers if global_stickers else None
+                        )
                     except Exception as e:
                         logger.info(f"Error while creating a new thread: {e}")
-                        target_thread = parent_message.thread
-                        result = await target_thread.send(content=msg)
 
             except Exception as e:
                 logger.error(f"Some error occurred while sending thread message to {target_channel.guild.name}#{target_channel.name}: {e}")
@@ -217,10 +240,18 @@ async def handle_reply_message_in_channel(bot, message: discord.Message):
 
             # Send the reply to the target channel
             try:
+                # Process attachments and stickers
+                files = await helpers.process_attachments(message)
+                global_stickers, guild_sticker_files = await helpers.process_stickers(message)
+
+                # Merge attachments + guild-native sticker files
+                files += guild_sticker_files
+                
                 result = await target_channel.send(
                     content=msg,
                     embed=message.embeds[0] if message.embeds else None,
-                    files=[await file.to_file() for file in message.attachments],
+                    files=files if files else None,
+                    stickers=global_stickers if global_stickers else None,
                     reference=reference
                 )
             except Exception as e:
@@ -320,12 +351,20 @@ async def handle_reply_message_in_thread(bot, message: discord.Message):
                     except Exception as e:
                         logger.error(f"Failed to create message reference for thread {target_thread.name}: {e}")
                         reference = None
-                
+
+                # Process attachments and stickers
+                files = await helpers.process_attachments(message)
+                global_stickers, guild_sticker_files = await helpers.process_stickers(message)
+
+                # Merge attachments + guild-native sticker files
+                files += guild_sticker_files
+
                 # Send the reply to the thread
                 result = await target_thread.send(
                     content=msg,
                     embed=message.embeds[0] if message.embeds else None,
-                    files=[await file.to_file() for file in message.attachments],
+                    files=files if files else None,
+                    stickers=global_stickers if global_stickers else None,
                     reference=reference
                 )
             else:
@@ -352,8 +391,3 @@ async def handle_reply_message_in_thread(bot, message: discord.Message):
     except Exception as e:
         logger.error(f"Failed to save reply message group entry: {e}") 
 
-
-
-# -->message: <Message id=1425894368836849796 channel=<TextChannel id=1279822661194879101 name='основной' position=0 nsfw=False news=False category_id=1279822661194879099> type=<MessageType.reply: 19> author=<Member id=231855055601532938 name='choikak' global_name='choikak🥚' bot=False nick=None guild=<Guild id=1279822661194879098 name='Сервер1' shard_id=0 chunked=False member_count=4>> flags=<MessageFlags value=0>>
-
-# -->message: <Message id=1425894424939860088 channel=<TextChannel id=1279822661194879101 name='основной' position=0 nsfw=False news=False category_id=1279822661194879099> type=<MessageType.default: 0> author=<Member id=231855055601532938 name='choikak' global_name='choikak🥚' bot=False nick=None guild=<Guild id=1279822661194879098 name='Сервер1' shard_id=0 chunked=False member_count=4>> flags=<MessageFlags value=16384>>

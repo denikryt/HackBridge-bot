@@ -1,3 +1,5 @@
+import io
+import aiohttp
 from roles import SuperAdmin, Admin, Registrator
 import json 
 import config
@@ -209,3 +211,43 @@ def validate_single_emoji(emoji_string: str) -> bool:
             r"^(?:[\U0001F1E6-\U0001F1FF]{2}|[\U0001F600-\U0001F64F]|[\U0001F300-\U0001F5FF]|[\U0001F680-\U0001F6FF]|[\U0001F700-\U0001F77F]|[\U0001F780-\U0001F7FF]|[\U0001F800-\U0001F8FF]|[\U0001F900-\U0001F9FF]|[\U0001FA00-\U0001FA6F]|[\U0001FA70-\U0001FAFF]|[\U00002702-\U000027B0]|[\U000024C2-\U0001F251])$"
         )
         return bool(unicode_emoji_pattern.match(emoji_string))
+
+async def process_attachments(message: discord.Message):
+    """Convert message attachments to discord.File objects."""
+    files = [await f.to_file() for f in message.attachments]
+    return files
+
+async def process_stickers(message: discord.Message):
+    """
+    Process stickers:
+    - Global/default stickers → return as list to send via stickers=...
+    - Guild-native PNG stickers → download and return as files
+    """
+    global_stickers = []
+    guild_sticker_files = []
+
+    if not message.stickers:
+        return global_stickers, guild_sticker_files
+
+    async with aiohttp.ClientSession() as session:
+        for sticker_item in message.stickers:
+            # Only try to download guild-native static PNG stickers
+            if sticker_item.format == discord.StickerFormatType.png and message.guild:
+                try:
+                    sticker = await message.guild.fetch_sticker(sticker_item.id)
+                    if sticker.type == discord.StickerType.guild:
+                        async with session.get(sticker.url) as resp:
+                            if resp.status == 200:
+                                data = await resp.read()
+                                guild_sticker_files.append(
+                                    discord.File(io.BytesIO(data), filename=f"{sticker.name}.png")
+                                )
+                        continue  # Done, do not send as sticker
+                except Exception as e:
+                    print(f"Failed to fetch guild sticker {sticker_item.id}: {e}")
+                    continue
+
+            # Non-guild / global sticker → send as sticker
+            global_stickers.append(sticker_item)
+
+    return global_stickers, guild_sticker_files
