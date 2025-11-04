@@ -7,6 +7,7 @@ from config import TOKEN
 import commands as command_module
 import message_edit
 import message_delete
+import message_reaction
 from message_worker import MessageWorker
 from logger_config import setup_logging, get_logger
 
@@ -66,6 +67,14 @@ async def on_message_edit(before, after):
 @bot.event
 async def on_message_delete(message):
     await message_delete.handle_message_delete(bot, message)
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    await message_reaction.handle_reaction_add(bot, payload)
+
+@bot.event
+async def on_raw_reaction_remove(payload):
+    await message_reaction.handle_reaction_remove(bot, payload)
 
 @bot.event
 async def on_command_error(ctx, error):

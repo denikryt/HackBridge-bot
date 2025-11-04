@@ -7,3 +7,5 @@ linked_channels.json
 registered.json
 roles.json
 fixes.txt
+test.py
+test-reactions.pytest.py
