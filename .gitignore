@@ -8,4 +8,4 @@ registered.json
 roles.json
 fixes.txt
 test.py
-test-reactions.pytest.py
+test-reactions.py
