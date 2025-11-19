@@ -162,7 +162,7 @@ def form_header(message: discord.Message, guild_name: str, channel_group_len: in
     guild_link = f"<https://discord.com/channels/{guild_id}>"
     # guild_name_formatted = f"-# {emoji.emojize(':loud_sound:')} _**[{guild_name}]({guild_link})**_"
     guild_name_formatted = f"-# ➤ _**[{guild_name}]({guild_link})**_"
-    guild_name_formatted = f"-# ➤ _**{guild_name}**_"
+    guild_name_formatted = f"-# ➤ _{guild_name}_"
 
     # Combine nickname and guild name for the message header
     # header = f"{nickname}: "# {guild_name_formatted}"
