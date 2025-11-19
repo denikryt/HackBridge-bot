@@ -1079,15 +1079,40 @@ def setup(bot):
             await interaction.response.send_message("This channel is not linked to any other channels.", ephemeral=True)
             return
 
-        msg = f"Invite links for linked channels in group **{found_group['group_name']}**:\n"
+        lines = [f"Invite links for linked channels in group **{found_group['group_name']}**:"]
         for link in found_group.get("links", []):
             invite_url = link.get("invite_url")
             if invite_url:
-                msg += f"→ [{link.get('guild_name')}]({invite_url}) | #**{link.get('channel_name')}**\n"
+                lines.append(f"→ [{link.get('guild_name')}]({invite_url}) | #**{link.get('channel_name')}**")
             else:
-                msg += f"→ [{link.get('guild_name')}] | #**{link.get('channel_name')}** (No invite found)\n"
+                lines.append(f"→ [{link.get('guild_name')}] | #**{link.get('channel_name')}** (No invite found)")
+
+        msg = "\n".join(lines)
 
         await interaction.response.send_message(msg)
+
+        broadcast_targets = [link for link in found_group.get("links", []) if link.get("channel_id") != current_channel_id]
+        forwarded_channels = []
+        for target in broadcast_targets:
+            channel_id = target.get("channel_id")
+            try:
+                target_channel = bot.get_channel(int(channel_id)) if channel_id else None
+            except Exception as e:
+                logger.error(f"Failed to resolve broadcast channel ID {channel_id}: {e}")
+                continue
+
+            if not target_channel:
+                logger.warning(f"Linked channel with ID {channel_id} not found in bot cache for broadcast")
+                continue
+
+            try:
+                await target_channel.send(msg)
+                forwarded_channels.append(f"{target_channel.guild.name}#{target_channel.name}")
+            except Exception as e:
+                logger.error(f"Failed to send invites message to {target_channel.guild.name}#{target_channel.name}: {e}")
+
+        if forwarded_channels:
+            logger.info(f"Broadcasted invite list to linked channels: {', '.join(forwarded_channels)}")
 
     @bot.tree.command(name="update_invites", description="Regenerate and update invite links for all linked channels in a group")
     async def update_invites(interaction: discord.Interaction):
