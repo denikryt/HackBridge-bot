@@ -2,6 +2,7 @@ import discord
 from logger_config import get_logger
 import message_send
 import message_forward
+import helpers
 
 logger = get_logger(__name__)
 
@@ -33,6 +34,15 @@ class MessageWorker:
         based on their type (regular, reply, thread, reply in thread).
         """
         if self._should_ignore_message(message):
+            return
+
+        # Ignore messages in channels that are not part of any linked group.
+        if isinstance(message.channel, discord.Thread):
+            group_name = helpers.get_group_name(str(message.channel.parent_id))
+        else:
+            group_name = helpers.get_group_name(str(message.channel.id))
+        if not group_name:
+            logger.debug("Ignoring message outside of any group: %s in %s", message.author, message.channel)
             return
 
         try:
