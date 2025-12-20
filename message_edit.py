@@ -1,6 +1,7 @@
 import discord
 import helpers
 import database
+from header_state import header_state
 from logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -52,10 +53,9 @@ async def handle_channel_message_edit(bot, before: discord.Message, after: disco
     
     logger.info(f"Updating edited message in {len(target_channel_ids)} linked channels")
     
-    # Form new header and content for the edited message
+    # Prepare shared header parts; whether to include a header is decided per linked message.
     guild_name = after.guild.name if after.guild else "Unknown Guild"
-    header = helpers.form_header(after, guild_name, len(target_channel_ids))
-    new_msg = helpers.form_message_text(header, after.content)
+    channel_group_len = len(target_channel_ids)
     
     edited_count = 0
     # Update the message in each linked channel
@@ -69,6 +69,9 @@ async def handle_channel_message_edit(bot, before: discord.Message, after: disco
             try:
                 # Fetch the linked message and edit it
                 linked_message = await target_channel.fetch_message(int(entry["message_id"]))
+                include_header = header_state.content_has_header(linked_message.content or "")
+                header = helpers.form_header(after, guild_name, channel_group_len) if include_header else ""
+                new_msg = helpers.form_message_text(header, after.content)
                 await linked_message.edit(content=new_msg)
                 edited_count += 1
                 logger.debug(f"Updated message in {target_channel.guild.name}#{target_channel.name}")
@@ -103,10 +106,9 @@ async def handle_thread_message_edit(bot, before: discord.Message, after: discor
     
     logger.info(f"Updating edited thread message in {len(target_channel_ids)} linked channels")
     
-    # Form new header and content for the edited message
+    # Form new header pieces; include flag is inferred from stored message content.
     guild_name = after.guild.name if after.guild else "Unknown Guild"
-    header = helpers.form_header(after, guild_name, len(target_channel_ids))
-    new_msg = helpers.form_message_text(header, after.content)
+    channel_group_len = len(target_channel_ids)
 
     edited_count = 0
     # Update the message in each linked thread
@@ -125,6 +127,9 @@ async def handle_thread_message_edit(bot, before: discord.Message, after: discor
                 if parent_message.thread:
                     # Fetch the linked message in the thread and edit it
                     linked_message = await parent_message.thread.fetch_message(int(entry["message_id"]))
+                    include_header = header_state.content_has_header(linked_message.content or "")
+                    header = helpers.form_header(after, guild_name, channel_group_len) if include_header else ""
+                    new_msg = helpers.form_message_text(header, after.content)
                     await linked_message.edit(content=new_msg)
                     edited_count += 1
                     logger.debug(f"Updated thread message in {target_channel.guild.name}#{target_channel.name}")
