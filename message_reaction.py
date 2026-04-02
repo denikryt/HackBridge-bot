@@ -30,6 +30,9 @@ async def _process_reaction(bot, payload: discord.RawReactionActionEvent, operat
         logger.warning(f"Unable to resolve channel {payload.channel_id} for reaction event.")
         return
 
+    if isinstance(channel, discord.Thread) and getattr(channel.parent, "type", None) == discord.ChannelType.forum:
+        return
+
     try:
         message = await channel.fetch_message(payload.message_id)
     except discord.Forbidden:

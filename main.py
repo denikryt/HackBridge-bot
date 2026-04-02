@@ -9,6 +9,7 @@ import message_edit
 import message_delete
 import message_reaction
 from message_worker import MessageWorker
+import forum_sync
 from logger_config import setup_logging, get_logger
 
 # Setup logging before anything else
@@ -21,7 +22,8 @@ intents.guilds = True
 intents.messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-message_worker = MessageWorker(bot)
+forum_sync_handler = forum_sync.setup(bot)
+message_worker = MessageWorker(bot, forum_sync_handler)
 
 # Create files if they do not exist
 def create_files():

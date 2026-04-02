@@ -25,7 +25,9 @@ def load_registered_channels(file_path="registered.json"):
             return json.load(f)
     except FileNotFoundError as e:
         logger.error(f"File not found: {e}")
-        return e
+        return {"register": []}
+    except json.JSONDecodeError:
+        return {"register": []}
 
 def load_roles(file_path="roles.json"):
     try:

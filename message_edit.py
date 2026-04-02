@@ -16,7 +16,7 @@ async def handle_message_edit(bot, before: discord.Message, after: discord.Messa
     # Ignore edits from webhooks
     if after.webhook_id:
         return
-    
+
     # Only handle edits if the content actually changed
     if before.content == after.content:
         return
@@ -29,9 +29,20 @@ async def handle_message_edit(bot, before: discord.Message, after: discord.Messa
     
     # Check if the edited message is in a thread
     if isinstance(after.channel, discord.Thread):
-        await handle_thread_message_edit(bot, before, after)
+        if _is_forum_thread(after.channel):
+            await handle_forum_thread_message_edit(bot, before, after)
+        else:
+            await handle_thread_message_edit(bot, before, after)
     else:
         await handle_channel_message_edit(bot, before, after)
+
+def _is_forum_thread(thread: discord.Thread) -> bool:
+    parent = thread.parent
+    if parent is None:
+        return False
+    if isinstance(parent, discord.ForumChannel):
+        return True
+    return getattr(parent, "type", None) == discord.ChannelType.forum
 
 async def handle_channel_message_edit(bot, before: discord.Message, after: discord.Message):
     """Handles edited messages in regular channels and updates all linked messages."""
@@ -145,3 +156,47 @@ async def handle_thread_message_edit(bot, before: discord.Message, after: discor
             logger.error(f"Target channel with ID {entry['channel_id']} not found or no thread_id in entry")
     
     logger.info(f"Successfully updated {edited_count} linked thread messages")
+
+async def handle_forum_thread_message_edit(bot, before: discord.Message, after: discord.Message):
+    """Handles edited messages in forum threads and updates all linked messages."""
+
+    parent_channel_id = str(after.channel.parent_id)
+    target_channel_ids = helpers.find_linked_channels(parent_channel_id)
+
+    if target_channel_ids is None:
+        logger.debug(f"No linked channels found for parent channel {parent_channel_id}")
+        return
+
+    group_name = helpers.get_group_name(parent_channel_id)
+    message_entry = database.get_message_group_entry_by_message_id(after.id, group_name)
+    if not message_entry:
+        logger.warning(f"No message group entry found for edited forum message {after.id}")
+        return
+
+    guild_name = after.guild.name if after.guild else "Unknown Guild"
+    channel_group_len = len(target_channel_ids)
+
+    edited_count = 0
+    for entry in message_entry:
+        if entry.get("thread_id") == str(after.channel.id):
+            continue
+
+        target_thread = bot.get_channel(int(entry["thread_id"]))
+        if not target_thread:
+            try:
+                target_thread = await bot.fetch_channel(int(entry["thread_id"]))
+            except Exception as e:
+                logger.error(f"Failed to fetch forum thread {entry['thread_id']}: {e}")
+                continue
+
+        try:
+            linked_message = await target_thread.fetch_message(int(entry["message_id"]))
+            include_header = header_state.content_has_header(linked_message.content or "")
+            header = helpers.form_header(after, guild_name, channel_group_len) if include_header else ""
+            new_msg = helpers.form_message_text(header, after.content)
+            await linked_message.edit(content=new_msg)
+            edited_count += 1
+        except Exception as e:
+            logger.error(f"Failed to edit forum thread message {entry['message_id']}: {e}")
+
+    logger.info(f"Successfully updated {edited_count} linked forum messages")

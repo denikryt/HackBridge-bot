@@ -7,8 +7,9 @@ env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
 TOKEN = os.environ.get("token")
-MONGODB_URI = os.environ.get("mongodb_uri")
-DB_NAME = "HackBridge"
+MONGO_URI = os.environ.get("MONGO_URI") or os.environ.get("mongodb_uri")
+MONGODB_URI = MONGO_URI
+DB_NAME = os.environ.get("MONGO_DB") or "HackBridge"
 AVATAR_COLLECTION_NAME = os.environ.get("avatar_collection_name")
 DEFAULT_AVATAR = ":monkey_face:"
 

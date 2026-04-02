@@ -1,14 +1,16 @@
 import discord
 from logger_config import get_logger
 import message_send
+import message_reply
 import message_forward
 import helpers
 
 logger = get_logger(__name__)
 
 class MessageWorker:
-    def __init__(self, bot):
+    def __init__(self, bot, forum_sync=None):
         self.bot = bot
+        self.forum_sync = forum_sync
 
     def _should_ignore_message(self, message: discord.Message) -> bool:
         """
@@ -47,10 +49,17 @@ class MessageWorker:
 
         try:
             if isinstance(message.channel, discord.Thread):
+                if self.forum_sync and self.forum_sync.is_forum_thread(message.channel):
+                    logger.info(f"Processing forum thread message from {message.author} in {message.channel.name}")
+                    if message.reference:
+                        await message_reply.handle_forum_thread_reply_message(self.bot, message)
+                    else:
+                        await message_send.handle_forum_thread_message(self.bot, message)
+                    return
                 if message.reference:
                     # Reply in thread
                     logger.info(f"Processing reply in thread from {message.author} in {message.channel.name}")
-                    await message_send.handle_reply_message_in_thread(self.bot, message)
+                    await message_reply.handle_reply_message_in_thread(self.bot, message)
                 else:
                     # Regular thread message
                     logger.info(f"Processing thread message from {message.author} in {message.channel.name}")
@@ -64,7 +73,7 @@ class MessageWorker:
                     else:
                         # Reply in regular channel
                         logger.info(f"Processing reply message from {message.author} in {message.channel.name}")
-                        await message_send.handle_reply_message_in_channel(self.bot, message)
+                        await message_reply.handle_reply_message_in_channel(self.bot, message)
                 else:
                     # Regular message
                     logger.info(f"Processing regular message from {message.author} in {message.channel.name}")

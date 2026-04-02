@@ -15,14 +15,25 @@ async def handle_message_delete(bot, message: discord.Message):
     # Ignore deletions of messages from webhooks
     if message.webhook_id:
         return
-    
+
     logger.info(f"Handling message deletion from {message.author} in {message.guild.name}#{message.channel.name}")
     
     # Check if the deleted message is in a thread
     if isinstance(message.channel, discord.Thread):
-        await handle_thread_message_delete(bot, message)
+        if _is_forum_thread(message.channel):
+            await handle_forum_thread_message_delete(bot, message)
+        else:
+            await handle_thread_message_delete(bot, message)
     else:
         await handle_channel_message_delete(bot, message)
+
+def _is_forum_thread(thread: discord.Thread) -> bool:
+    parent = thread.parent
+    if parent is None:
+        return False
+    if isinstance(parent, discord.ForumChannel):
+        return True
+    return getattr(parent, "type", None) == discord.ChannelType.forum
 
 async def handle_channel_message_delete(bot, message: discord.Message):
     """Handles deleted messages in regular channels and deletes all linked messages."""
@@ -136,3 +147,47 @@ async def handle_thread_message_delete(bot, message: discord.Message):
         logger.error(f"Failed to remove message group entry: {e}")
     
     logger.info(f"Successfully deleted {deleted_count} linked thread messages")
+
+async def handle_forum_thread_message_delete(bot, message: discord.Message):
+    """Handles deleted messages in forum threads and deletes all linked messages."""
+
+    parent_channel_id = str(message.channel.parent_id)
+    target_channel_ids = helpers.find_linked_channels(parent_channel_id)
+
+    if target_channel_ids is None:
+        logger.debug(f"No linked channels found for parent channel {parent_channel_id}")
+        return
+
+    group_name = helpers.get_group_name(parent_channel_id)
+    message_entry = database.get_message_group_entry_by_message_id(message.id, group_name)
+    if not message_entry:
+        logger.warning(f"No message group entry found for deleted forum message {message.id}")
+        return
+
+    deleted_count = 0
+    for entry in message_entry:
+        if entry.get("thread_id") == str(message.channel.id):
+            continue
+
+        target_thread = bot.get_channel(int(entry["thread_id"]))
+        if not target_thread:
+            try:
+                target_thread = await bot.fetch_channel(int(entry["thread_id"]))
+            except Exception as e:
+                logger.error(f"Failed to fetch forum thread {entry['thread_id']}: {e}")
+                continue
+
+        try:
+            linked_message = await target_thread.fetch_message(int(entry["message_id"]))
+            await linked_message.delete()
+            deleted_count += 1
+        except Exception as e:
+            logger.error(f"Failed to delete forum thread message {entry['message_id']}: {e}")
+
+    try:
+        database.delete_message_group_entry_by_message_id(message.id, group_name)
+        logger.debug(f"Removed message group entry for deleted forum message {message.id}")
+    except Exception as e:
+        logger.error(f"Failed to remove forum message group entry: {e}")
+
+    logger.info(f"Successfully deleted {deleted_count} linked forum messages")

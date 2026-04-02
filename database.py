@@ -5,7 +5,7 @@ from logger_config import get_logger
 logger = get_logger(__name__)
 
 # MongoDB configuration
-mongo_client = MongoClient(config.MONGODB_URI)  
+mongo_client = MongoClient(config.MONGO_URI)
 db = mongo_client[config.DB_NAME]
 
 def check_and_create_group_collection(group_name: str):
@@ -129,4 +129,55 @@ def delete_user_avatar(user_id: str):
         return True
     else:
         logger.info(f"No avatar found to delete for user {user_id}")
+        return False
+
+def _forum_thread_collection_name(group_name: str) -> str:
+    return f"{group_name}_forum_threads"
+
+def save_forum_thread_group_entry(group_name: str, thread_group_entry: list):
+    collection_name = _forum_thread_collection_name(group_name)
+    check_and_create_group_collection(collection_name)
+    collection = db[collection_name]
+    collection.insert_one({"threads": thread_group_entry})
+    logger.info("Saved forum thread group entry to database.")
+
+def get_forum_thread_group_entry_by_thread_id(thread_id: str, group_name: str):
+    if not type(thread_id) is str:
+        thread_id = str(thread_id)
+
+    collection_name = _forum_thread_collection_name(group_name)
+    check_and_create_group_collection(collection_name)
+    collection = db[collection_name]
+    result = collection.find_one({
+        "threads": {
+            "$elemMatch": {
+                "thread_id": thread_id
+            }
+        }
+    })
+    if result:
+        return result["threads"]
+    else:
+        logger.info(f"No forum thread entry found for thread ID: {thread_id} in group: {group_name}")
+        return None
+
+def delete_forum_thread_group_entry_by_thread_id(thread_id: str, group_name: str):
+    if not type(thread_id) is str:
+        thread_id = str(thread_id)
+
+    collection_name = _forum_thread_collection_name(group_name)
+    check_and_create_group_collection(collection_name)
+    collection = db[collection_name]
+    result = collection.delete_one({
+        "threads": {
+            "$elemMatch": {
+                "thread_id": thread_id
+            }
+        }
+    })
+    if result.deleted_count > 0:
+        logger.info(f"Deleted forum thread group entry for thread ID: {thread_id} in group: {group_name}")
+        return True
+    else:
+        logger.info(f"No forum thread entry found to delete for thread ID: {thread_id} in group: {group_name}")
         return False

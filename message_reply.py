@@ -2,33 +2,52 @@ from datetime import timezone
 import discord
 import helpers
 import database
+import message_send
 from header_state import header_state
 from logger_config import get_logger
 
 logger = get_logger(__name__)
 
-async def handle_message(bot, message: discord.Message):
-    """Handles incoming messages and forwards them to linked channels."""
+
+def _is_forum_thread(thread: discord.Thread) -> bool:
+    parent = thread.parent
+    if parent is None:
+        return False
+    if isinstance(parent, discord.ForumChannel):
+        return True
+    return getattr(parent, "type", None) == discord.ChannelType.forum
+
+
+async def handle_reply_message_in_channel(bot, message: discord.Message):
+    """Handles reply messages in general channels and forwards them to linked channels."""
 
     timestamp = message.created_at
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=timezone.utc)
 
-    # Try to find linked channels
-    target_channel_ids = helpers.find_linked_channels(str(message.channel.id))
+    channel_id_for_lookup = str(message.channel.id)
+    target_channel_ids = helpers.find_linked_channels(channel_id_for_lookup)
     if target_channel_ids is None:
+        logger.debug(f"No linked channels found for channel {channel_id_for_lookup}")
         return
 
-    logger.info(f"Forwarding message from {message.author} in {message.guild.name}#{message.channel.name} to {len(target_channel_ids)} linked channels")
+    logger.info(f"Forwarding reply from {message.author} to {len(target_channel_ids)} linked channels")
 
-    # Form first message entry
+    group_name = helpers.get_group_name(channel_id_for_lookup)
+    referenced_message_id = message.reference.message_id
+    referenced_message_entry = database.get_message_group_entry_by_message_id(referenced_message_id, group_name)
+
+    if not referenced_message_entry:
+        logger.warning(f"No message group entry found for referenced message {referenced_message_id}, treating as regular message")
+        await message_send.handle_message(bot, message)
+        return
+
     message_group_entry = [{
         "guild_id": helpers.get_guild_id_from_channel_id(str(message.channel.id)),
         "channel_id": str(message.channel.id),
         "message_id": str(message.id)
     }]
 
-    group_name = helpers.get_group_name(str(message.channel.id))
     guild_name = message.guild.name if message.guild else "Unknown Guild"
     channel_group_len = len(target_channel_ids)
     author_id = str(message.author.id)
@@ -41,18 +60,29 @@ async def handle_message(bot, message: discord.Message):
         target_channel = bot.get_channel(int(target_channel_id))
         target_guild_id = helpers.get_guild_id_from_channel_id(target_channel_id)
         if target_channel:
+            target_referenced_message_id = None
+
+            for entry in referenced_message_entry:
+                if entry["guild_id"] == target_guild_id and entry["channel_id"] == target_channel_id:
+                    logger.info(f"Found entry for target channel {target_channel_id} in message group entry")
+                    target_referenced_message_id = entry["message_id"]
+                    break
+                else:
+                    logger.info(f"No entry found for target channel {target_channel_id} in message group entry")
+
+            try:
+                reference = None
+                if target_referenced_message_id:
+                    reference = discord.MessageReference(
+                        message_id=int(target_referenced_message_id),
+                        channel_id=target_channel.id,
+                        guild_id=target_channel.guild.id
+                    )
+            except Exception as e:
+                logger.error(f"Failed to create message reference for {target_channel.guild.name}#{target_channel.name}: {e}")
+
             lock = header_state.get_lock(group_name, target_channel_id, None)
             async with lock:
-                include_header = header_state.should_include_header(
-                    group_name=group_name,
-                    channel_id=target_channel_id,
-                    thread_id=None,
-                    author_id=author_id,
-                    source_guild_id=source_guild_id,
-                    timestamp=timestamp,
-                    is_reply=False,
-                )
-
                 include_header, reason, prev_state = header_state.decide_header(
                     group_name=group_name,
                     channel_id=target_channel_id,
@@ -60,7 +90,7 @@ async def handle_message(bot, message: discord.Message):
                     author_id=author_id,
                     source_guild_id=source_guild_id,
                     timestamp=timestamp,
-                    is_reply=False,
+                    is_reply=True,
                 )
 
                 logger.debug(
@@ -71,20 +101,17 @@ async def handle_message(bot, message: discord.Message):
                 header = helpers.form_header(message, guild_name, channel_group_len) if include_header else ""
                 msg = helpers.form_message_text(header, message.content)
 
-                # Send the message to the target channel
                 try:
-                    # Process attachments and stickers
                     files = await helpers.process_attachments(message)
                     global_stickers, guild_sticker_files = await helpers.process_stickers(message)
-
-                    # Merge attachments + guild-native sticker files
                     files += guild_sticker_files
 
                     result = await target_channel.send(
                         content=msg,
                         embed=message.embeds[0] if message.embeds else None,
                         files=files if files else None,
-                        stickers=global_stickers if global_stickers else None
+                        stickers=global_stickers if global_stickers else None,
+                        reference=reference
                     )
                     header_state.update_state(
                         group_name=group_name,
@@ -94,51 +121,53 @@ async def handle_message(bot, message: discord.Message):
                         source_guild_id=source_guild_id,
                         timestamp=timestamp,
                     )
-                    logger.debug(f"Message forwarded to {target_channel.guild.name}#{target_channel.name}")
                 except Exception as e:
-                    logger.error(f"Failed to send message to {target_channel.guild.name}#{target_channel.name}: {e}")
-                    continue
+                    logger.error(f"Failed to send reply message to {target_channel.guild.name}#{target_channel.name}: {e}")
+                    return
 
-                # Form message entry for every linked channel
-                message_group_entry.append({
-                     "guild_id": target_guild_id,
-                     "channel_id": target_channel_id,
-                     "message_id": str(result.id)
-                })
-
+                entry = {
+                    "guild_id": target_guild_id,
+                    "channel_id": target_channel_id,
+                    "message_id": str(result.id)
+                }
+                message_group_entry.append(entry)
         else:
             logger.error(f"Target channel with ID {target_channel_id} not found")
             return
-        
-    # Save the message group entry to the database
-    group_name = helpers.get_group_name(str(message.channel.id))
+
+    group_name = helpers.get_group_name(channel_id_for_lookup)
     try:
         database.save_message_group_entry(group_name, message_group_entry)
-        logger.debug(f"Message group entry saved for group {group_name}")
+        logger.info(f"Reply message successfully forwarded and saved")
     except Exception as e:
-        logger.error(f"Failed to save message group entry: {e}")
+        logger.error(f"Failed to save reply message group entry: {e}")
 
-async def handle_thread_message(bot, message: discord.Message):
-    """Handles messages in threads and forwards them to linked channels."""
-    
-    logger.info(f"Handling thread message from {message.author} in thread {message.channel.name}")
+
+async def handle_reply_message_in_thread(bot, message: discord.Message):
+    """Handles reply messages in threads and forwards them to linked channels."""
 
     timestamp = message.created_at
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=timezone.utc)
 
-    # Get the parent channel ID
+    logger.info(f"Handling reply message in thread from {message.author}")
     parent_channel_id = str(message.channel.parent_id)
-
-    # Try to find linked channels for the parent channel
     target_channel_ids = helpers.find_linked_channels(parent_channel_id)
     if target_channel_ids is None:
         logger.debug(f"No linked channels found for parent channel {parent_channel_id}")
         return
-    
-    logger.info(f"Forwarding thread message to {len(target_channel_ids)} linked channels")
-    
-    # Form first message entry
+
+    logger.info(f"Forwarding thread reply from {message.author} to {len(target_channel_ids)} linked channels")
+
+    group_name = helpers.get_group_name(parent_channel_id)
+    referenced_message_id = message.reference.message_id
+    referenced_message_entry = database.get_message_group_entry_by_message_id(referenced_message_id, group_name)
+
+    if not referenced_message_entry:
+        logger.warning(f"No message group entry found for referenced message {referenced_message_id}, treating as regular message")
+        await message_send.handle_message(bot, message)
+        return
+
     message_group_entry = [{
         "guild_id": helpers.get_guild_id_from_channel_id(parent_channel_id),
         "channel_id": parent_channel_id,
@@ -146,9 +175,7 @@ async def handle_thread_message(bot, message: discord.Message):
         "message_id": str(message.id)
     }]
 
-    group_name = helpers.get_group_name(parent_channel_id)
     guild_name = message.guild.name if message.guild else "Unknown Guild"
-    thread_name = message.channel.name
     channel_group_len = len(target_channel_ids)
     author_id = str(message.author.id)
     source_guild_id = str(message.guild.id) if message.guild else "unknown"
@@ -156,85 +183,71 @@ async def handle_thread_message(bot, message: discord.Message):
     if source_changed:
         logger.debug("[header] group source changed group=%s source_guild=%s", group_name, source_guild_id)
 
-    thread_message_entry = database.get_message_group_entry_by_message_id(message.channel.id, group_name)
-    
     for target_channel_id in target_channel_ids:
         target_channel = bot.get_channel(int(target_channel_id))
         target_guild_id = helpers.get_guild_id_from_channel_id(target_channel_id)
-        
         if target_channel:
-            target_thread_message_id = None
-            target_thread = None
-            try:
-                for entry in thread_message_entry:
-                    if entry["guild_id"] == target_guild_id and entry["channel_id"] == target_channel_id:
-                        target_thread_message_id = entry["message_id"]
-                        break
-                    else:
-                        logger.info(f"No entry found for target channel {target_channel_id} in thread message group entry")
-                if not target_thread_message_id:
-                    logger.warning(f"No parent thread message found for target channel {target_channel_id}")
-                    continue
-                try:
-                    parent_message = await target_channel.fetch_message(target_thread_message_id)
-                except Exception as e:
-                    logger.warning(f"Failed to fetch parent message in {target_channel.guild.name}#{target_channel.name}: {e}")
-                    return 
-                
-                parent_text = parent_message.content
-                thread_name = " ".join(parent_text.split()[:5])
+            target_referenced_message_id = None
+            target_thread_id = None
 
-                # Process attachments and stickers
-                files = await helpers.process_attachments(message)
-                global_stickers, guild_sticker_files = await helpers.process_stickers(message)
-
-                # Merge attachments + guild-native sticker files
-                files += guild_sticker_files
-
-                if parent_message.thread:
-                    target_thread = parent_message.thread
+            for entry in referenced_message_entry:
+                if entry["guild_id"] == target_guild_id and entry["channel_id"] == target_channel_id:
+                    target_referenced_message_id = entry["message_id"]
+                    target_thread_id = entry["thread_id"]
+                    break
                 else:
-                    try:
-                        thread = await parent_message.create_thread(
-                            name=f"{thread_name}",
-                        )
-                        target_thread = thread
-                    except Exception as e:
-                        logger.info(f"Error while creating a new thread: {e}")
+                    logger.info(f"No entry found for target channel {target_channel_id} in thread message group entry")
 
+            try:
+                parent_message = await target_channel.fetch_message(target_thread_id)
             except Exception as e:
-                logger.error(f"Some error occurred while sending thread message to {target_channel.guild.name}#{target_channel.name}: {e}")
-            
-            if not target_thread:
-                logger.error(f"Could not resolve target thread for {target_channel.guild.name}#{target_channel.name}")
-                continue
+                logger.warning(f"Failed to fetch parent message in {target_channel.guild.name}#{target_channel.name}: {e}")
+                return
 
-            lock = header_state.get_lock(group_name, target_channel_id, target_thread.id)
-            async with lock:
-                include_header, reason, prev_state = header_state.decide_header(
-                    group_name=group_name,
-                    channel_id=target_channel_id,
-                    thread_id=str(target_thread.id),
-                    author_id=author_id,
-                    source_guild_id=source_guild_id,
-                    timestamp=timestamp,
-                    is_reply=False,
-                )
+            if parent_message.thread:
+                target_thread = parent_message.thread
+                reference = None
+                if target_referenced_message_id:
+                    try:
+                        reference = discord.MessageReference(
+                            message_id=int(target_referenced_message_id),
+                            channel_id=target_thread.id,
+                            guild_id=target_channel.guild.id
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to create message reference for thread {target_thread.name}: {e}")
+                        reference = None
 
-                logger.debug(
-                    "[header] decision group=%s dest=%s thread=%s include=%s reason=%s author=%s source_guild=%s prev_state=%s",
-                    group_name, target_channel_id, target_thread.id, include_header, reason, author_id, source_guild_id, prev_state,
-                )
+                lock = header_state.get_lock(group_name, target_channel_id, target_thread.id)
+                async with lock:
+                    include_header, reason, prev_state = header_state.decide_header(
+                        group_name=group_name,
+                        channel_id=target_channel_id,
+                        thread_id=str(target_thread.id),
+                        author_id=author_id,
+                        source_guild_id=source_guild_id,
+                        timestamp=timestamp,
+                        is_reply=True,
+                    )
 
-                header = helpers.form_header(message, guild_name, channel_group_len) if include_header else ""
-                msg = helpers.form_message_text(header, message.content)
+                    logger.debug(
+                        "[header] decision group=%s dest=%s thread=%s include=%s reason=%s author=%s source_guild=%s prev_state=%s",
+                        group_name, target_channel_id, target_thread.id, include_header, reason, author_id, source_guild_id, prev_state,
+                    )
 
-                try:
+                    header = helpers.form_header(message, guild_name, channel_group_len) if include_header else ""
+                    msg = helpers.form_message_text(header, message.content)
+
+                    files = await helpers.process_attachments(message)
+                    global_stickers, guild_sticker_files = await helpers.process_stickers(message)
+                    files += guild_sticker_files
+
                     result = await target_thread.send(
                         content=msg,
                         embed=message.embeds[0] if message.embeds else None,
                         files=files if files else None,
-                        stickers=global_stickers if global_stickers else None
+                        stickers=global_stickers if global_stickers else None,
+                        reference=reference
                     )
                     header_state.update_state(
                         group_name=group_name,
@@ -244,54 +257,31 @@ async def handle_thread_message(bot, message: discord.Message):
                         source_guild_id=source_guild_id,
                         timestamp=timestamp,
                     )
-                except Exception as e:
-                    logger.error(f"Some error occurred while sending thread message to {target_channel.guild.name}#{target_channel.name}: {e}")
-                    continue
+            else:
+                logger.error(f"Parent message does not have a thread in {target_channel.guild.name}#{target_channel.name}")
+                return
 
-                # Form message entry for every linked channel
-                entry = {
-                    "guild_id": target_guild_id,
-                    "channel_id": target_channel_id,
-                    "thread_id": target_thread_message_id,
-                    "message_id": str(result.id)
-                }
-                message_group_entry.append(entry)
-            
+            entry = {
+                "guild_id": target_guild_id,
+                "channel_id": target_channel_id,
+                "thread_id": target_thread_id,
+                "message_id": str(result.id)
+            }
+            message_group_entry.append(entry)
         else:
             logger.error(f"Target channel with ID {target_channel_id} not found")
             return
-    
-    # Save the message group entry to the database
+
     group_name = helpers.get_group_name(parent_channel_id)
     try:
         database.save_message_group_entry(group_name, message_group_entry)
-        logger.info(f"Thread message successfully forwarded and saved")
+        logger.info(f"Thread reply message successfully forwarded and saved")
     except Exception as e:
-        logger.error(f"Failed to save thread message group entry: {e}")
+        logger.error(f"Failed to save reply message group entry: {e}")
 
-def _is_forum_thread(thread: discord.Thread) -> bool:
-    parent = thread.parent
-    if parent is None:
-        return False
-    if isinstance(parent, discord.ForumChannel):
-        return True
-    return getattr(parent, "type", None) == discord.ChannelType.forum
 
-def _is_forum_starter_message(message: discord.Message, thread_entry: list, parent_channel_id: str) -> bool:
-    source_guild_id = helpers.get_guild_id_from_channel_id(parent_channel_id)
-    for entry in thread_entry:
-        if (
-            entry.get("guild_id") == source_guild_id
-            and entry.get("channel_id") == parent_channel_id
-            and entry.get("thread_id") == str(message.channel.id)
-        ):
-            starter_message_id = entry.get("starter_message_id")
-            if starter_message_id and str(message.id) == str(starter_message_id):
-                return True
-    return str(message.id) == str(message.channel.id)
-
-async def handle_forum_thread_message(bot, message: discord.Message, ignore_reference: bool = False):
-    """Handles messages in forum threads and forwards them to linked forum threads."""
+async def handle_forum_thread_reply_message(bot, message: discord.Message):
+    """Handles reply messages in forum threads and forwards them to linked forum threads."""
     if message.author == bot.user:
         return
     if message.webhook_id:
@@ -310,10 +300,13 @@ async def handle_forum_thread_message(bot, message: discord.Message, ignore_refe
     if not thread_entry:
         return
 
-    if _is_forum_starter_message(message, thread_entry, parent_channel_id):
+    referenced_message_id = message.reference.message_id if message.reference else None
+    if not referenced_message_id:
         return
 
-    if message.reference and not ignore_reference:
+    referenced_entry = database.get_message_group_entry_by_message_id(str(referenced_message_id), group_name)
+    if not referenced_entry:
+        await message_send.handle_forum_thread_message(bot, message, ignore_reference=True)
         return
 
     target_channel_ids = helpers.find_linked_channels(parent_channel_id)
@@ -349,6 +342,20 @@ async def handle_forum_thread_message(bot, message: discord.Message, ignore_refe
                 logger.error(f"Failed to fetch target forum thread {entry['thread_id']}: {e}")
                 continue
 
+        target_referenced_message_id = None
+        for ref_entry in referenced_entry:
+            if ref_entry.get("thread_id") == entry["thread_id"]:
+                target_referenced_message_id = ref_entry.get("message_id")
+                break
+
+        reference = None
+        if target_referenced_message_id:
+            reference = discord.MessageReference(
+                message_id=int(target_referenced_message_id),
+                channel_id=int(entry["thread_id"]),
+                guild_id=target_thread.guild.id
+            )
+
         lock = header_state.get_lock(group_name, entry["channel_id"], entry["thread_id"])
         async with lock:
             include_header, _, _ = header_state.decide_header(
@@ -358,7 +365,7 @@ async def handle_forum_thread_message(bot, message: discord.Message, ignore_refe
                 author_id=author_id,
                 source_guild_id=source_guild_id,
                 timestamp=timestamp,
-                is_reply=False,
+                is_reply=True,
             )
 
             header = helpers.form_header(message, guild_name, channel_group_len) if include_header else ""
@@ -373,7 +380,8 @@ async def handle_forum_thread_message(bot, message: discord.Message, ignore_refe
                     content=msg,
                     embed=message.embeds[0] if message.embeds else None,
                     files=files if files else None,
-                    stickers=global_stickers if global_stickers else None
+                    stickers=global_stickers if global_stickers else None,
+                    reference=reference
                 )
                 header_state.update_state(
                     group_name=group_name,
@@ -390,9 +398,9 @@ async def handle_forum_thread_message(bot, message: discord.Message, ignore_refe
                     "message_id": str(result.id)
                 })
             except Exception as e:
-                logger.error(f"Failed to send forum thread message to {entry['thread_id']}: {e}")
+                logger.error(f"Failed to send forum thread reply to {entry['thread_id']}: {e}")
 
     try:
         database.save_message_group_entry(group_name, message_group_entry)
     except Exception as e:
-        logger.error(f"Failed to save forum message group entry: {e}")
+        logger.error(f"Failed to save forum reply group entry: {e}")

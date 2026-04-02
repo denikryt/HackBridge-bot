@@ -183,10 +183,10 @@ def setup(bot):
             await interaction.response.send_message("An error occurred while loading data.", ephemeral=True)
             return
         
-        # Check if the command is used in a text channel
-        if interaction.channel.type != discord.ChannelType.text:
-            logger.warning(f"register_channel command used in non-text channel: {interaction.channel.type}")
-            await interaction.response.send_message("This command available for text channels only", ephemeral=True)
+        # Check if the command is used in a text or forum channel
+        if interaction.channel.type not in (discord.ChannelType.text, discord.ChannelType.forum):
+            logger.warning(f"register_channel command used in unsupported channel: {interaction.channel.type}")
+            await interaction.response.send_message("This command is available for text or forum channels only", ephemeral=True)
             return
         
         # Check if the user has permission to register the channel
@@ -230,6 +230,97 @@ def setup(bot):
             
         await interaction.response.send_message(f"Channel **{interaction.channel.name}** registered for message forwarding.", ephemeral=True)
 
+    class RegisterChannelSelect(discord.ui.ChannelSelect):
+        def __init__(self, invoker_id: str):
+            super().__init__(
+                placeholder="Select a channel to register",
+                min_values=1,
+                max_values=1,
+                channel_types=[discord.ChannelType.text, discord.ChannelType.forum],
+            )
+            self.invoker_id = invoker_id
+
+        async def callback(self, interaction: discord.Interaction):
+            if str(interaction.user.id) != self.invoker_id:
+                await interaction.response.send_message("This menu isn't for you.", ephemeral=True)
+                return
+
+            if not helpers.has_user_permission(str(interaction.user.id), str(interaction.guild.id), "register_channel"):
+                await interaction.response.send_message("You have no permission to register channels for message forwarding.", ephemeral=True)
+                return
+
+            selected_channel = self.values[0]
+            if selected_channel.type not in (discord.ChannelType.text, discord.ChannelType.forum):
+                await interaction.response.send_message("This command is available for text or forum channels only", ephemeral=True)
+                return
+
+            try:
+                registered_channels = helpers.load_registered_channels()
+            except Exception as e:
+                logger.error(f"Failed to load registered channels: {e}")
+                await interaction.response.send_message("An error occurred while loading data.", ephemeral=True)
+                return
+
+            guild_id = str(interaction.guild.id)
+            guild_name = interaction.guild.name if interaction.guild else "Unknown Guild"
+            channel_id = str(selected_channel.id)
+
+            for entry in registered_channels["register"]:
+                if entry["guild_id"] == guild_id and entry["channel_id"] == channel_id:
+                    await interaction.response.send_message("This channel is already registered for message forwarding.", ephemeral=True)
+                    return
+
+            entry = {
+                "guild_id": guild_id,
+                "guild_name": guild_name,
+                "channel_id": channel_id,
+                "channel_name": selected_channel.name,
+                "registrator_id": str(interaction.user.id),
+                "registrator_name": interaction.user.display_name,
+            }
+
+            registered_channels["register"].append(entry)
+
+            try:
+                with open("registered.json", "w") as f:
+                    json.dump(registered_channels, f, indent=4, ensure_ascii=False)
+            except Exception as e:
+                logger.error(f"Failed to save registered channels data: {e}")
+                await interaction.response.send_message("An error occurred while saving data.", ephemeral=True)
+                return
+
+            self.view.stop()
+            await interaction.response.send_message(f"Channel **{selected_channel.name}** registered for message forwarding.", ephemeral=True)
+
+    class RegisterChannelSelectView(discord.ui.View):
+        def __init__(self, invoker_id: str):
+            super().__init__(timeout=120)
+            self.add_item(RegisterChannelSelect(invoker_id))
+
+        async def on_timeout(self):
+            for item in self.children:
+                item.disabled = True
+
+    @bot.tree.command(name="register_channel_new", description="Register a channel via dropdown selection")
+    async def register_channel_new(interaction: discord.Interaction):
+        logger.info(
+            "register_channel_new invoked by %s (%s) in guild %s (%s)",
+            interaction.user.display_name,
+            interaction.user.id,
+            interaction.guild.name if interaction.guild else "Unknown Guild",
+            interaction.guild.id if interaction.guild else "Unknown Guild",
+        )
+
+        if interaction.guild is None:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+
+        if not helpers.has_user_permission(str(interaction.user.id), str(interaction.guild.id), "register_channel"):
+            await interaction.response.send_message("You have no permission to register channels for message forwarding.", ephemeral=True)
+            return
+
+        view = RegisterChannelSelectView(str(interaction.user.id))
+        await interaction.response.send_message("Select a channel to register:", view=view, ephemeral=True)
         
     @bot.tree.command(name="show_registered_channels", description="Show registered channels for message forwarding")
     async def show_registered_channels(interaction: discord.Interaction):
@@ -304,7 +395,16 @@ def setup(bot):
     async def link_channel(interaction: discord.Interaction, guild_id: str, target_channel_id: str, group_name: str):
         '''Link this channel with specified guild and channel'''
 
-        logger.info(f"link_channel command invoked by {interaction.user.display_name} ({interaction.user.id}) in guild {interaction.guild.name} ({interaction.guild.id}), target guild: {guild_id}, target channel: {target_channel_id}, group: {group_name}")
+        logger.info(
+            "link_channel command invoked by %s (%s) in guild %s (%s), target guild: %s, target channel: %s, group: %s",
+            interaction.user.display_name,
+            interaction.user.id,
+            interaction.guild.name,
+            interaction.guild.id,
+            guild_id,
+            target_channel_id,
+            group_name,
+        )
 
         try:
             registered_channels = commands_helpers.load_registered_channels()
@@ -320,14 +420,30 @@ def setup(bot):
             await interaction.response.send_message("You have no permission to link channels for message forwarding.", ephemeral=True)
             return
 
-        if not await commands_helpers.is_channel_registered(registered_channels, str(interaction.guild.id), str(interaction.channel.id)):
-            logger.warning(f"Current channel {interaction.channel.name} ({interaction.channel.id}) is not registered")
-            await interaction.response.send_message("This channel is not registered for message forwarding.", ephemeral=True)
-            return
+        source_channel_id = str(interaction.channel.id)
+        if not await commands_helpers.is_channel_registered_by_user_id(registered_channels, str(interaction.guild.id), source_channel_id, str(interaction.user.id)):
+            user_registered = [
+                entry for entry in registered_channels.get("register", [])
+                if entry["guild_id"] == str(interaction.guild.id) and entry["registrator_id"] == str(interaction.user.id)
+            ]
+            if len(user_registered) == 1:
+                source_channel_id = user_registered[0]["channel_id"]
+            else:
+                logger.warning(
+                    "No unique source channel for user %s in guild %s",
+                    interaction.user.id,
+                    interaction.guild.id,
+                )
+                await interaction.response.send_message(
+                    "You have multiple registered channels. Run this command in the channel you want to link.",
+                    ephemeral=True,
+                )
+                return
 
-        if not await commands_helpers.is_channel_registered_by_user(registered_channels, interaction):
-            logger.warning(f"Current channel {interaction.channel.name} ({interaction.channel.id}) is not registered by user {interaction.user.display_name} ({interaction.user.id})")
-            await interaction.response.send_message("You can only link channels that you have registered.", ephemeral=True)
+        source_channel = interaction.guild.get_channel(int(source_channel_id)) if interaction.guild else None
+        if not source_channel:
+            logger.warning(f"Source channel {source_channel_id} not found in guild {interaction.guild.id}")
+            await interaction.response.send_message("Source channel not found in this server.", ephemeral=True)
             return
 
         if not await commands_helpers.is_channel_registered(registered_channels, guild_id, target_channel_id):
@@ -345,7 +461,7 @@ def setup(bot):
         target_channel = target_guild.get_channel(int(target_channel_id)) if target_guild else None
 
         # Create infinite invite links
-        current_invite_url = await commands_helpers.create_invite(interaction.channel)
+        current_invite_url = await commands_helpers.create_invite(source_channel)
         target_invite_url = await commands_helpers.create_invite(target_channel)
 
         # Load existing links
@@ -358,9 +474,9 @@ def setup(bot):
 
         # Form current and target entries with invite links
         current_entry = {
-            "channel_id": str(interaction.channel.id),
-            "channel_name": str(interaction.channel.name),
-            "guild_id": str(interaction.guild.id),
+            "channel_id": str(source_channel.id),
+            "channel_name": str(source_channel.name),
+            "guild_id": str(source_channel.guild.id),
             "guild_name": interaction.guild.name if interaction.guild else "Unknown Guild",
             "invite_url": current_invite_url
         }
@@ -402,7 +518,7 @@ def setup(bot):
 
         # Remove the current channel and target channel from registered.json if it is linked
         try:
-            commands_helpers.remove_channels_from_registered(registered_channels, [str(interaction.channel.id), target_channel_id], [str(interaction.guild.id), guild_id])
+            commands_helpers.remove_channels_from_registered(registered_channels, [str(source_channel.id), target_channel_id], [str(interaction.guild.id), guild_id])
             commands_helpers.save_json_file("registered.json", registered_channels)
             logger.info(f"Removed linked channels from registered.json")
         except Exception as e:
@@ -413,7 +529,7 @@ def setup(bot):
         logger.debug(f"Removed user {interaction.user.display_name} from temporary registrators")
 
         await interaction.response.send_message(
-            f"Channel **{interaction.channel.name}** linked with **{target_channel.name if target_channel else 'Unknown'}** in **{target_guild.name if target_guild else 'Unknown'}**.",
+            f"Channel **{source_channel.name}** linked with **{target_channel.name if target_channel else 'Unknown'}** in **{target_guild.name if target_guild else 'Unknown'}**.",
             ephemeral=True
         )
 
