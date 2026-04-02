@@ -535,7 +535,7 @@ def setup(bot):
 
     @bot.tree.command(name="show_linked_channels", description="Show linked servers and channels with this channel")
     async def linked_channels(interaction: discord.Interaction):
-        '''Show linked servers and channels with this channel'''
+        '''Show all linked channels for the current server'''
         logger.info(f"show_linked_channels command invoked by {interaction.user.display_name} ({interaction.user.id}) in guild {interaction.guild.name} ({interaction.guild.id}), channel {interaction.channel.name} ({interaction.channel.id})")
         
         try:
@@ -546,34 +546,44 @@ def setup(bot):
             return
 
         current_guild_id = str(interaction.guild.id)
-        current_channel_id = str(interaction.channel.id)
+        guild_groups = []
 
-        # Find the group containing the current channel
         for group in linked_channels["groups"]:
-            if any(link["guild_id"] == current_guild_id and link["channel_id"] == current_channel_id for link in group["links"]):
-                logger.debug(f"Found linked group '{group['group_name']}' for channel {interaction.channel.name}")
-                msg = f"Linked channels for **{interaction.channel.name}** in group **{group['group_name']}**:\n"
+            local_links = [link for link in group["links"] if link["guild_id"] == current_guild_id]
+            if local_links:
+                guild_groups.append((group, local_links))
 
-                for link in group["links"]:
-                    # # Skip the current channel
-                    if link["guild_id"] == current_guild_id and link["channel_id"] == current_channel_id:
-                        msg += f"→ This channel: Guild: {interaction.guild.name} | Channel: {interaction.channel.name}\n"
+        if not guild_groups:
+            logger.debug(f"Guild {interaction.guild.name} ({current_guild_id}) has no linked channels")
+            await interaction.response.send_message("There are no linked channels for this server.", ephemeral=True)
+            return
+
+        lines = []
+
+        for group, local_links in guild_groups:
+            if lines:
+                lines.append("")
+            lines.append(f"## Group *{group['group_name']}*:")
+
+            for local_link in local_links:
+                local_guild = bot.get_guild(int(local_link["guild_id"]))
+                local_channel = local_guild.get_channel(int(local_link["channel_id"])) if local_guild else None
+                local_channel_name = local_channel.name if local_channel else local_link.get("channel_name", local_link["channel_id"])
+                local_guild_name = local_guild.name if local_guild else local_link.get("guild_name", local_link["guild_id"])
+                lines.append(f":pushpin: `{local_channel_name}` - **{local_guild_name}**")
+
+                for linked_link in group["links"]:
+                    if linked_link["channel_id"] == local_link["channel_id"] and linked_link["guild_id"] == local_link["guild_id"]:
                         continue
 
-                    # Try to get guild and channel objects
-                    guild = bot.get_guild(int(link["guild_id"]))
-                    channel = guild.get_channel(int(link["channel_id"])) if guild else None
+                    linked_guild = bot.get_guild(int(linked_link["guild_id"]))
+                    linked_channel = linked_guild.get_channel(int(linked_link["channel_id"])) if linked_guild else None
+                    linked_channel_name = linked_channel.name if linked_channel else linked_link.get("channel_name", linked_link["channel_id"])
+                    linked_guild_name = linked_guild.name if linked_guild else linked_link.get("guild_name", linked_link["guild_id"])
+                    lines.append(f"- `{linked_channel_name}` - **{linked_guild_name}**")
 
-                    if channel:
-                        msg += f"→ Guild: {guild.name} | Channel: {channel.name}\n"
-                    else:
-                        msg += f"→ Guild ID: {link['guild_id']} | Channel ID: {link['channel_id']} (Channel not found)\n"
-
-                await interaction.response.send_message(msg, ephemeral=True)
-                return
-
-        logger.debug(f"Channel {interaction.channel.name} ({current_channel_id}) is not linked to any other channels")
-        await interaction.response.send_message("This channel is not linked to any other channels.", ephemeral=True)
+        msg = "\n".join(lines)
+        await interaction.response.send_message(msg, ephemeral=True)
 
     @bot.tree.command(name="unlink_channel", description="Unlink this channel from group of linked channels")
     async def unlink(interaction: discord.Interaction):
