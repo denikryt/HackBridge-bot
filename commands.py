@@ -1104,24 +1104,22 @@ def setup(bot):
         
         await interaction.response.send_message(f"**{user.name}** (ID:**{user.id}**) has been removed from temporary registrators of this bot in this server.", ephemeral=True)
 
-    @bot.tree.command(name="link_channel_to_group", description="Link a channel to an existing group of linked channels")
-    @app_commands.describe(
-        group_name="Name of the group to link this channel to")
+    async def _perform_link_channel_to_group(interaction: discord.Interaction, source_channel_id: str, group_name: str):
+        logger.info(
+            "link_channel_to_group perform invoked by %s (%s) in guild %s (%s), source channel: %s, group: %s",
+            interaction.user.display_name,
+            interaction.user.id,
+            interaction.guild.name,
+            interaction.guild.id,
+            source_channel_id,
+            group_name,
+        )
 
-    @app_commands.autocomplete(
-        group_name = autocomplete_group_name)
-
-    async def link_channel_to_group(interaction: discord.Interaction, group_name: str):
-        '''Link a channel to an existing group of linked channels'''
-        logger.info(f"link_channel_to_group command invoked by {interaction.user.display_name} ({interaction.user.id}) in guild {interaction.guild.name} ({interaction.guild.id}), channel {interaction.channel.name} ({interaction.channel.id}), group: {group_name}")
-
-        # Permission check
         if not commands_helpers.has_user_permission(str(interaction.user.id), str(interaction.guild.id), "link_channel"):
             logger.warning(f"User {interaction.user.display_name} ({interaction.user.id}) denied permission to link channel to group")
             await interaction.response.send_message("You have no permission to link channels to groups", ephemeral=True)
             return
 
-        # Load registered channels data
         try:
             registered_data = commands_helpers.load_registered_channels()
             logger.debug("Successfully loaded registered channels data")
@@ -1130,7 +1128,6 @@ def setup(bot):
             await interaction.response.send_message("An error occurred while loading data.", ephemeral=True)
             return
 
-        # Load linked channels data
         try:
             linked_channels = commands_helpers.load_linked_channels()
         except Exception as e:
@@ -1138,34 +1135,27 @@ def setup(bot):
             await interaction.response.send_message("An error occurred while loading linked channels data.", ephemeral=True)
             return
 
-        # Check if the current channel is registered and registered by the user
-        if not await commands_helpers.is_channel_registered(registered_data, str(interaction.guild.id), str(interaction.channel.id)):
-            logger.warning(f"Channel {interaction.channel.name} ({interaction.channel.id}) is not registered")
+        if not await commands_helpers.is_channel_registered(registered_data, str(interaction.guild.id), source_channel_id):
+            logger.warning(f"Channel {source_channel_id} is not registered")
             await interaction.response.send_message("This channel is not registered for message forwarding.", ephemeral=True)
             return
 
-        if not await commands_helpers.is_channel_registered_by_user(registered_data, interaction):
-            logger.warning(f"Channel {interaction.channel.name} ({interaction.channel.id}) is not registered by user {interaction.user.display_name} ({interaction.user.id})")
+        if not await commands_helpers.is_channel_registered_by_user_id(registered_data, str(interaction.guild.id), source_channel_id, str(interaction.user.id)):
+            logger.warning(f"Channel {source_channel_id} is not registered by user {interaction.user.display_name} ({interaction.user.id})")
             await interaction.response.send_message("You can only link channels that you have registered.", ephemeral=True)
             return
 
-        # Check if the current channel is already part of any other group
-        if commands_helpers.is_channel_in_any_group(str(interaction.channel.id), linked_channels):
-            logger.warning(f"Channel {interaction.channel.name} ({interaction.channel.id}) is already linked to another group.")
-            await interaction.response.send_message(
-                f"This channel is already linked to another group.",
-                ephemeral=True
-            )
+        if commands_helpers.is_channel_in_any_group(str(source_channel_id), linked_channels):
+            logger.warning(f"Channel {source_channel_id} is already linked to another group.")
+            await interaction.response.send_message("This channel is already linked to another group.", ephemeral=True)
             return
 
-        # Find the specified group
         group = commands_helpers.get_group_by_name(linked_channels, group_name)
         if not group:
             logger.warning(f"No group found with name '{group_name}'")
             await interaction.response.send_message(f"No group found with name **{group_name}**.", ephemeral=True)
             return
 
-        # Verify that all channels in the group are registered by the user
         not_all_registered, not_registered_link = await commands_helpers.are_all_group_channels_registered_by_user(group, registered_data, str(interaction.user.id))
         if not_all_registered:
             logger.warning(f"Channel {not_registered_link['channel_name']} from {not_registered_link['guild_name']} in group {group_name} is not registered by user {interaction.user.display_name}")
@@ -1175,18 +1165,21 @@ def setup(bot):
             )
             return
 
-        # Generate invite link for the current channel
+        source_channel = interaction.guild.get_channel(int(source_channel_id)) if interaction.guild else None
+        if not source_channel:
+            await interaction.response.send_message("Source channel not found in this server.", ephemeral=True)
+            return
+
         try:
-            invite_url = await commands_helpers.create_invite(interaction.channel)
-            logger.debug(f"Generated invite link for channel {interaction.channel.name} ({interaction.channel.id})")
+            invite_url = await commands_helpers.create_invite(source_channel)
+            logger.debug(f"Generated invite link for channel {source_channel.name} ({source_channel.id})")
         except Exception as e:
-            logger.error(f"Failed to generate invite link for channel {interaction.channel.name} ({interaction.channel.id}): {e}")
+            logger.error(f"Failed to generate invite link for channel {source_channel.name} ({source_channel.id}): {e}")
             invite_url = None
 
-        # Add the current channel to the group's links
         current_entry = {
-            "channel_id": str(interaction.channel.id),
-            "channel_name": interaction.channel.name,
+            "channel_id": str(source_channel.id),
+            "channel_name": source_channel.name,
             "guild_id": str(interaction.guild.id),
             "guild_name": interaction.guild.name if interaction.guild else "Unknown Guild",
             "invite_url": invite_url
@@ -1197,17 +1190,15 @@ def setup(bot):
 
         try:
             commands_helpers.save_json_file("linked_channels.json", linked_channels)
-            logger.info(f"Successfully linked channel {interaction.channel.name} ({interaction.channel.id}) to group '{group_name}'")
+            logger.info(f"Successfully linked channel {source_channel.name} ({source_channel.id}) to group '{group_name}'")
         except Exception as e:
             logger.error(f"Failed to save linked channels data: {e}")
             await interaction.response.send_message("An error occurred while saving data.", ephemeral=True)
             return
 
-        # Remove the user from temporary registrators if they are one
         commands_helpers.remove_registrator(str(interaction.user.id), str(interaction.guild.id))
         logger.debug(f"Removed user {interaction.user.display_name} from temporary registrators")
 
-        # Remove all group channels from registered.json
         for cid in group["channel_list"]:
             registered_data["register"] = [
                 entry for entry in registered_data["register"]
@@ -1221,9 +1212,135 @@ def setup(bot):
             logger.error(f"Failed to update registered channels after linking to group: {e}")
 
         await interaction.response.send_message(
-            f"Channel **{interaction.channel.name}** has been linked to the group **{group_name}**.",
+            f"Channel **{source_channel.name}** has been linked to the group **{group_name}**.",
             ephemeral=True
         )
+
+    class LinkToGroupSourceSelect(discord.ui.Select):
+        def __init__(self, source_options: list[discord.SelectOption]):
+            super().__init__(
+                placeholder="Select a channel to link",
+                min_values=1,
+                max_values=1,
+                options=source_options,
+            )
+
+        async def callback(self, interaction: discord.Interaction):
+            self.view.selected_source_channel_id = self.values[0]
+            await interaction.response.edit_message(view=self.view)
+
+    class LinkToGroupNameSelect(discord.ui.Select):
+        def __init__(self, group_options: list[discord.SelectOption]):
+            super().__init__(
+                placeholder="Select a group",
+                min_values=1,
+                max_values=1,
+                options=group_options,
+            )
+
+        async def callback(self, interaction: discord.Interaction):
+            self.view.selected_group_name = self.values[0]
+            await interaction.response.edit_message(view=self.view)
+
+    class LinkChannelToGroupView(discord.ui.View):
+        def __init__(self, invoker_id: str, source_options: list[discord.SelectOption], group_options: list[discord.SelectOption]):
+            super().__init__(timeout=120)
+            self.invoker_id = invoker_id
+            self.selected_source_channel_id: str | None = None
+            self.selected_group_name: str | None = None
+            self.add_item(LinkToGroupSourceSelect(source_options))
+            self.add_item(LinkToGroupNameSelect(group_options))
+
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            if str(interaction.user.id) != self.invoker_id:
+                await interaction.response.send_message("This menu isn't for you.", ephemeral=True)
+                return False
+            return True
+
+        @discord.ui.button(label="Link to group", style=discord.ButtonStyle.primary)
+        async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if not self.selected_source_channel_id or not self.selected_group_name:
+                await interaction.response.send_message("Select both a source channel and a group first.", ephemeral=True)
+                return
+            self.stop()
+            await _perform_link_channel_to_group(
+                interaction,
+                source_channel_id=self.selected_source_channel_id,
+                group_name=self.selected_group_name,
+            )
+
+        async def on_timeout(self):
+            for item in self.children:
+                item.disabled = True
+
+    @bot.tree.command(name="link_channel_to_group", description="Link one of your registered channels to an existing group")
+    async def link_channel_to_group(interaction: discord.Interaction):
+        logger.info(f"link_channel_to_group command invoked by {interaction.user.display_name} ({interaction.user.id}) in guild {interaction.guild.name} ({interaction.guild.id}), channel {interaction.channel.name} ({interaction.channel.id})")
+
+        if not commands_helpers.has_user_permission(str(interaction.user.id), str(interaction.guild.id), "link_channel"):
+            logger.warning(f"User {interaction.user.display_name} ({interaction.user.id}) denied permission to link channel to group")
+            await interaction.response.send_message("You have no permission to link channels to groups", ephemeral=True)
+            return
+
+        try:
+            registered_data = commands_helpers.load_registered_channels()
+            logger.debug("Successfully loaded registered channels data")
+        except Exception as e:
+            logger.error(f"Failed to load registered channels: {e}")
+            await interaction.response.send_message("An error occurred while loading data.", ephemeral=True)
+            return
+
+        try:
+            linked_channels = commands_helpers.load_linked_channels()
+            logger.debug("Successfully loaded linked channels data")
+        except Exception as e:
+            logger.error(f"Failed to load linked channels: {e}")
+            await interaction.response.send_message("An error occurred while loading linked channels data.", ephemeral=True)
+            return
+
+        source_entries = []
+        for entry in registered_data.get("register", []):
+            if entry["guild_id"] != str(interaction.guild.id) or entry["registrator_id"] != str(interaction.user.id):
+                continue
+            if commands_helpers.is_channel_in_any_group(entry["channel_id"], linked_channels):
+                continue
+            source_entries.append(entry)
+
+        if not source_entries:
+            await interaction.response.send_message("You have no registered channels in this server available for linking.", ephemeral=True)
+            return
+
+        group_options = []
+        for group in linked_channels.get("groups", []):
+            not_all_registered, _ = await commands_helpers.are_all_group_channels_registered_by_user(group, registered_data, str(interaction.user.id))
+            if not not_all_registered:
+                group_options.append(
+                    discord.SelectOption(
+                        label=group["group_name"][:100],
+                        value=group["group_name"],
+                        description=f"{len(group.get('links', []))} linked channel(s)"[:100],
+                    )
+                )
+
+        if not group_options:
+            await interaction.response.send_message("You have no existing groups available for linking.", ephemeral=True)
+            return
+
+        source_options = []
+        for entry in source_entries[:25]:
+            guild = bot.get_guild(int(entry["guild_id"]))
+            channel = guild.get_channel(int(entry["channel_id"])) if guild else None
+            channel_name = channel.name if channel else entry.get("channel_name", entry["channel_id"])
+            source_options.append(
+                discord.SelectOption(
+                    label=channel_name[:100],
+                    value=entry["channel_id"],
+                    description=f"{interaction.guild.name} ({entry['channel_id']})"[:100],
+                )
+            )
+
+        view = LinkChannelToGroupView(str(interaction.user.id), source_options, group_options[:25])
+        await interaction.response.send_message("Select a channel and a group to link:", view=view, ephemeral=True)
 
     @bot.tree.command(name="set_my_avatar", description="Set an emoji as your avatar for bridged messages")
     @app_commands.describe(emoji="The emoji you want to use as your avatar")
