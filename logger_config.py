@@ -10,9 +10,7 @@ def setup_logging():
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
     
-    # Allow overriding log level via env; default to DEBUG to capture header decisions.
-    level_name = os.environ.get("LOG_LEVEL", "DEBUG").upper()
-    level = getattr(logging, level_name, logging.DEBUG)
+    level = logging.DEBUG
     
     # Basic formatter
     formatter = logging.Formatter(

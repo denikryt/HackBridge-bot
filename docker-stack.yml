@@ -12,7 +12,6 @@ services:
             - DISCORD_TOKEN=${DISCORD_TOKEN}
             - AVATAR_COLLECTION_NAME=${AVATAR_COLLECTION_NAME:-user_avatars_base}
             - LOG_FILE=${LOG_FILE:-logs/hackbridge_bot.log}
-            - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
         deploy:
             update_config:
                 order: stop-first
