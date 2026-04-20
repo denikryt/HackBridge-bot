@@ -1166,39 +1166,109 @@ def setup(bot):
         )
 
     class LinkToGroupSourceSelect(discord.ui.Select):
-        def __init__(self, source_options: list[discord.SelectOption]):
+        def __init__(self, source_options: list[discord.SelectOption], selected_source_channel_id: str | None = None):
+            options = [
+                discord.SelectOption(
+                    label=option.label,
+                    value=option.value,
+                    description=option.description,
+                    emoji=option.emoji,
+                    default=option.value == selected_source_channel_id,
+                )
+                for option in source_options
+            ]
             super().__init__(
                 placeholder="Select a channel to link",
                 min_values=1,
                 max_values=1,
-                options=source_options,
+                options=options,
             )
 
         async def callback(self, interaction: discord.Interaction):
             self.view.selected_source_channel_id = self.values[0]
-            await interaction.response.edit_message(view=self.view)
+            self.view.refresh_components()
+            await interaction.response.edit_message(content=self.view.render_message(), view=self.view)
 
     class LinkToGroupNameSelect(discord.ui.Select):
-        def __init__(self, group_options: list[discord.SelectOption]):
+        def __init__(self, group_options: list[discord.SelectOption], selected_group_name: str | None = None):
+            options = [
+                discord.SelectOption(
+                    label=option.label,
+                    value=option.value,
+                    description=option.description,
+                    emoji=option.emoji,
+                    default=option.value == selected_group_name,
+                )
+                for option in group_options
+            ]
             super().__init__(
                 placeholder="Select a group",
                 min_values=1,
                 max_values=1,
-                options=group_options,
+                options=options,
             )
 
         async def callback(self, interaction: discord.Interaction):
             self.view.selected_group_name = self.values[0]
-            await interaction.response.edit_message(view=self.view)
+            self.view.refresh_components()
+            await interaction.response.edit_message(content=self.view.render_message(), view=self.view)
 
     class LinkChannelToGroupView(discord.ui.View):
         def __init__(self, invoker_id: str, source_options: list[discord.SelectOption], group_options: list[discord.SelectOption]):
             super().__init__(timeout=120)
             self.invoker_id = invoker_id
+            self.source_options = source_options
+            self.group_options = group_options
             self.selected_source_channel_id: str | None = None
             self.selected_group_name: str | None = None
-            self.add_item(LinkToGroupSourceSelect(source_options))
-            self.add_item(LinkToGroupNameSelect(group_options))
+            self.source_select = LinkToGroupSourceSelect(source_options)
+            self.group_select = LinkToGroupNameSelect(group_options)
+            self.add_item(self.source_select)
+            self.add_item(self.group_select)
+            self.refresh_components()
+
+        def get_selected_source_label(self) -> str | None:
+            for option in self.source_options:
+                if option.value == self.selected_source_channel_id:
+                    return option.label
+            return None
+
+        def get_selected_group_label(self) -> str | None:
+            for option in self.group_options:
+                if option.value == self.selected_group_name:
+                    return option.label
+            return None
+
+        def render_message(self) -> str:
+            lines = ["Select a channel and a group to link:"]
+            if self.selected_source_channel_id:
+                lines.append(f"**Channel:** {self.get_selected_source_label()}")
+            if self.selected_group_name:
+                lines.append(f"**Group:** {self.get_selected_group_label()}")
+            return "\n".join(lines)
+
+        def refresh_components(self) -> None:
+            selected_channel_label = self.get_selected_source_label()
+            selected_group_label = self.get_selected_group_label()
+
+            self.source_select.placeholder = (
+                f"Channel: {selected_channel_label}"[:150]
+                if selected_channel_label else
+                "Select a channel to link"
+            )
+            self.group_select.placeholder = (
+                f"Group: {selected_group_label}"[:150]
+                if selected_group_label else
+                "Select a group"
+            )
+
+            for option in self.source_select.options:
+                option.default = option.value == self.selected_source_channel_id
+
+            for option in self.group_select.options:
+                option.default = option.value == self.selected_group_name
+
+            self.confirm.disabled = not (self.selected_source_channel_id and self.selected_group_name)
 
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
             if str(interaction.user.id) != self.invoker_id:
@@ -1224,6 +1294,10 @@ def setup(bot):
 
     @bot.tree.command(name="link_channel_to_group", description="Link one of your registered channels to an existing group")
     async def link_channel_to_group(interaction: discord.Interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+
         logger.info(f"link_channel_to_group command invoked by {interaction.user.display_name} ({interaction.user.id}) in guild {interaction.guild.name} ({interaction.guild.id}), channel {interaction.channel.name} ({interaction.channel.id})")
 
         if not commands_helpers.has_user_permission(str(interaction.user.id), str(interaction.guild.id), "link_channel"):
@@ -1280,16 +1354,17 @@ def setup(bot):
             guild = bot.get_guild(int(entry["guild_id"]))
             channel = guild.get_channel(int(entry["channel_id"])) if guild else None
             channel_name = channel.name if channel else entry.get("channel_name", entry["channel_id"])
+            guild_name = format_guild_display_name(guild, entry.get("guild_name", interaction.guild.name))
             source_options.append(
                 discord.SelectOption(
                     label=channel_name[:100],
                     value=entry["channel_id"],
-                    description=f"{interaction.guild.name} ({entry['channel_id']})"[:100],
+                    description=guild_name[:100],
                 )
             )
 
         view = LinkChannelToGroupView(str(interaction.user.id), source_options, group_options[:25])
-        await interaction.response.send_message("Select a channel and a group to link:", view=view, ephemeral=True)
+        await interaction.response.send_message(view.render_message(), view=view, ephemeral=True)
 
     @bot.tree.command(name="set_my_avatar", description="Set an emoji as your avatar for bridged messages")
     @app_commands.describe(emoji="The emoji you want to use as your avatar")
