@@ -30,9 +30,6 @@ async def _process_reaction(bot, payload: discord.RawReactionActionEvent, operat
         logger.warning(f"Unable to resolve channel {payload.channel_id} for reaction event.")
         return
 
-    if isinstance(channel, discord.Thread) and getattr(channel.parent, "type", None) == discord.ChannelType.forum:
-        return
-
     try:
         message = await channel.fetch_message(payload.message_id)
     except discord.Forbidden:
@@ -48,9 +45,21 @@ async def _process_reaction(bot, payload: discord.RawReactionActionEvent, operat
     emoji = payload.emoji
 
     if isinstance(channel, discord.Thread):
-        await _process_thread_message_reaction(bot, message, emoji, operation)
+        if _is_forum_thread(channel):
+            await _process_forum_thread_message_reaction(bot, message, emoji, operation)
+        else:
+            await _process_thread_message_reaction(bot, message, emoji, operation)
     else:
         await _process_channel_message_reaction(bot, message, emoji, operation)
+
+
+def _is_forum_thread(thread: discord.Thread) -> bool:
+    parent = thread.parent
+    if parent is None:
+        return False
+    if isinstance(parent, discord.ForumChannel):
+        return True
+    return getattr(parent, "type", None) == discord.ChannelType.forum
 
 
 async def _process_channel_message_reaction(bot, message: discord.Message, emoji, operation: str):
@@ -113,6 +122,34 @@ async def _process_thread_message_reaction(bot, message: discord.Message, emoji,
         await _apply_reaction_to_entry(bot, entry, emoji, operation)
 
 
+async def _process_forum_thread_message_reaction(bot, message: discord.Message, emoji, operation: str):
+    """Handle reaction propagation for messages posted inside forum threads."""
+    thread = message.channel
+    parent_channel_id = str(thread.parent_id)
+    target_channel_ids = helpers.find_linked_channels(parent_channel_id)
+    if target_channel_ids is None:
+        logger.debug(f"No linked channels configured for forum parent channel {parent_channel_id}")
+        return
+
+    group_name = helpers.get_group_name(parent_channel_id)
+    if not group_name:
+        logger.warning(f"No group name found for forum parent channel {parent_channel_id}")
+        return
+
+    message_entry = database.get_message_group_entry_by_message_id(str(message.id), group_name)
+    if not message_entry:
+        logger.debug(f"No forum message entry found for message {message.id} in group {group_name}")
+        return
+
+    thread_id = str(thread.id)
+    for entry in message_entry:
+        # Forum mappings store thread_id as the actual destination thread ID.
+        if entry.get("thread_id") == thread_id:
+            continue
+
+        await _apply_reaction_to_forum_entry(bot, entry, emoji, operation)
+
+
 async def _apply_reaction_to_entry(bot, entry: dict, emoji, operation: str):
     """Fetch the linked message represented by entry and apply the requested reaction operation."""
     target_channel = await _resolve_channel(bot, entry.get("guild_id"), entry["channel_id"])
@@ -138,6 +175,32 @@ async def _apply_reaction_to_entry(bot, entry: dict, emoji, operation: str):
         return
     except discord.HTTPException as exc:
         logger.error(f"Failed to fetch linked message {entry['message_id']}: {exc}")
+        return
+
+    await _apply_reaction(bot, target_message, emoji, operation)
+
+
+async def _apply_reaction_to_forum_entry(bot, entry: dict, emoji, operation: str):
+    """Fetch the linked forum-thread message represented by entry and apply the reaction."""
+    try:
+        target_thread = bot.get_channel(int(entry["thread_id"])) or await bot.fetch_channel(int(entry["thread_id"]))
+    except (discord.NotFound, discord.Forbidden):
+        logger.warning(f"Forum thread {entry['thread_id']} could not be resolved for reaction sync.")
+        return
+    except discord.HTTPException as exc:
+        logger.error(f"Failed to fetch forum thread {entry['thread_id']}: {exc}")
+        return
+
+    try:
+        target_message = await target_thread.fetch_message(int(entry["message_id"]))
+    except discord.Forbidden:
+        logger.error(f"No permission to fetch linked forum message {entry['message_id']} in thread {entry['thread_id']}")
+        return
+    except discord.NotFound:
+        logger.warning(f"Linked forum message {entry['message_id']} not found in thread {entry['thread_id']}")
+        return
+    except discord.HTTPException as exc:
+        logger.error(f"Failed to fetch linked forum message {entry['message_id']}: {exc}")
         return
 
     await _apply_reaction(bot, target_message, emoji, operation)
