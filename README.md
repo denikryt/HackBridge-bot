@@ -5,11 +5,13 @@ Originally created for the Kyiv Hackerspace community Discord server and friends
 Discord bridge bot for linking channels (and threads) across servers while keeping strict role-based access control.
 
 ## Core Features
-- Sync channel and thread messages: send, reply, edit, delete, forward, and mirror reaction adds/removals.
-- Custom emoji avatars per user via `/set_my_avatar`.
-- SuperAdmin/Admin/Registrator role system with command-level permissions.
-- Message privacy: only message IDs are stored in MongoDB; content never leaves Discord.
-- Local JSON files keep channel links and server role assignments.
+- Cross-server channel linking with named groups.
+- Bridging for text channels, threads, and forum channels.
+- Mirrored message lifecycle across linked destinations: new messages, replies, edits, deletes, and reactions.
+- Role-based administration with `SuperAdmin`, `Admin`, and one-time `Registrator` access.
+- Interactive slash-command flows for channel registration, linking, and group management.
+- Per-user custom emoji avatars in bridged message headers.
+- MongoDB-backed state and message mapping, without persisting message content.
 
 ## Usage Flow
 1. Install the bot on every server that should participate.
@@ -32,7 +34,7 @@ Slash-command autocompletions guide the linking process and help fill in the nec
 - Install deps with `pip install -r requirements.txt` and start the bot using `python main.py`.
 
 ## Production Deploy
-- GitHub Actions deploys on every push to `main` using [.github/workflows/publish.yml](.github/workflows/publish.yml).
+- GitHub Actions deploys on every push to `master` using [.github/workflows/publish.yml](.github/workflows/publish.yml).
 - The workflow builds `ghcr.io/denikryt/hackbridge-bot` and deploys it through Docker Stack using [docker-stack.yml](docker-stack.yml).
 - The production stack joins the external Docker network `infra_mongo-rs-net`, matching the `Feed-bot` deployment model.
 - Required repository secrets: `DEPLOY_USER`, `DEPLOY_HOST`, `DEPLOY_SSH_PRIVATE_KEY`, `MONGO_URI`, `MONGO_DB`, `DISCORD_TOKEN`, `AVATAR_COLLECTION_NAME`, `LOG_FILE`.
