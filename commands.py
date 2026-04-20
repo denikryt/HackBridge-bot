@@ -401,24 +401,25 @@ def setup(bot):
         else:
             logger.debug(f"User {interaction.user.display_name} is admin/superadmin, showing all channels")
 
-        # Create a message with all registered channels
-        msg = "Registered channels for message forwarding:\n"
+        # Create a readable message with all registered channels
+        lines = ["Registered channels for message forwarding:", ""]
         channel_count = 0
         for entry in registered_channels["register"]:
             guild = bot.get_guild(int(entry["guild_id"]))
             channel = guild.get_channel(int(entry["channel_id"])) if guild else None
-            if channel:
-                msg += (
-                    f"→ Guild: {guild.name} | Channel: {channel.name}\n"
-                    f"(Guild ID: {entry['guild_id']}, Channel_id: {entry['channel_id']})\n\n"
-                )
-                channel_count += 1
-            else:
-                msg += f"→ Guild ID: {entry['guild_id']} | Channel ID: {entry['channel_id']} (Channel not found)\n\n"
-                channel_count += 1
+            guild_name = guild.name if guild else entry.get("guild_name", f"Guild {entry['guild_id']}")
+            channel_name = channel.name if channel else entry.get("channel_name", f"Channel {entry['channel_id']}")
+
+            lines.append(f"**Guild:** {guild_name}")
+            lines.append(f"**Channel:** {channel_name}")
+            if not channel:
+                lines.append("`Channel not found`")
+            lines.append(f"`Guild ID: {entry['guild_id']} | Channel ID: {entry['channel_id']}`")
+            lines.append("")
+            channel_count += 1
         
         logger.info(f"Displayed {channel_count} registered channels to {interaction.user.display_name} ({interaction.user.id})")
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.response.send_message("\n".join(lines).rstrip(), ephemeral=True)
 
 
     async def _perform_link_channel(interaction: discord.Interaction, source_channel_id: str, target_guild_id: str, target_channel_id: str, group_name: str):
