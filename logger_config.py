@@ -5,8 +5,10 @@ import os
 def setup_logging():
     """Setup logging that overwrites logs/bot.log on each run and mirrors to console."""
     
-    # Create logs directory
-    os.makedirs("logs", exist_ok=True)
+    log_file = os.environ.get("LOG_FILE", "logs/bot.log")
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
     
     # Allow overriding log level via env; default to DEBUG to capture header decisions.
     level_name = os.environ.get("LOG_LEVEL", "DEBUG").upper()
@@ -24,7 +26,7 @@ def setup_logging():
     
     # File handler that overwrites on each run
     file_handler = logging.FileHandler(
-        "logs/bot.log",
+        log_file,
         mode='w',  # Overwrite mode
         encoding='utf-8'
     )
@@ -48,7 +50,7 @@ def setup_logging():
     logging.getLogger('pymongo.connection').setLevel(logging.WARNING)
     logging.getLogger('pymongo.topology').setLevel(logging.WARNING)
     
-    logging.info("Logging initialized - log file will be overwritten on each run")
+    logging.info("Logging initialized - log file %s will be overwritten on each run", log_file)
 
 def get_logger(name):
     """Get a logger instance"""

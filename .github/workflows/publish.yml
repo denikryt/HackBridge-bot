@@ -1,0 +1,79 @@
+name: Deploy docker image and update production
+
+on:
+    push:
+        branches:
+            - "main"
+
+env:
+    REGISTRY: ghcr.io
+    DOCKER_STACKE_NAME: hackbridge-bot
+    DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+    HOST: ${{ secrets.DEPLOY_HOST }}
+
+jobs:
+    build-and-push-image:
+        strategy:
+            matrix:
+                include:
+                    - name: hackbridge-bot
+                      context: .
+                      image: hackbridge-bot
+
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+            id-token: write
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Log in to the Container registry
+              uses: docker/login-action@v2
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Build and push main app image
+              uses: docker/build-push-action@v6
+              with:
+                  context: ${{ matrix.context }}
+                  push: true
+                  tags: |
+                      ${{ env.REGISTRY }}/denikryt/${{ matrix.image }}:latest
+                      ${{ env.REGISTRY }}/denikryt/${{ matrix.image }}:${{ github.sha }}
+                  build-args: |
+                      GIT_COMMIT_SHA=${{ github.sha }}
+
+    deploy:
+        runs-on: ubuntu-latest
+        needs:
+            - build-and-push-image
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Create env file
+              run: |
+                  echo "GIT_COMMIT_HASH='${{ github.sha }}'" >> ./envfile
+                  echo "MONGO_URI='${{ secrets.MONGO_URI }}'" >> ./envfile
+                  echo "MONGO_DB='${{ secrets.MONGO_DB }}'" >> ./envfile
+                  echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" >> ./envfile
+                  echo "AVATAR_COLLECTION_NAME='${{ secrets.AVATAR_COLLECTION_NAME }}'" >> ./envfile
+                  echo "LOG_FILE='${{ secrets.LOG_FILE }}'" >> ./envfile
+                  echo "LOG_LEVEL='${{ secrets.LOG_LEVEL }}'" >> ./envfile
+
+            - name: Docker Stack Deploy
+              uses: cssnr/stack-deploy-action@v1
+              with:
+                  name: ${{ env.DOCKER_STACKE_NAME }}
+                  file: docker-stack.yml
+                  host: ${{ env.HOST }}
+                  user: ${{ env.DEPLOY_USER }}
+                  ssh_key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+                  env_file: ./envfile

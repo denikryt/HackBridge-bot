@@ -27,5 +27,12 @@ Slash-command autocompletions guide the linking process and help fill in the nec
 
 ## Local Setup
 - Requirements: Python 3.8+, running MongoDB instance.
-- Create `.env` with `token`, `mongodb_uri`, and `avatar_collection_name`.
+- Create `.env` with `DISCORD_TOKEN`, `MONGO_URI`, `MONGO_DB`, and `AVATAR_COLLECTION_NAME`.
+- Legacy aliases `token`, `mongodb_uri`, and `avatar_collection_name` are still supported.
 - Install deps with `pip install -r requirements.txt` and start the bot using `python main.py`.
+
+## Production Deploy
+- GitHub Actions deploys on every push to `main` using [.github/workflows/publish.yml](.github/workflows/publish.yml).
+- The workflow builds `ghcr.io/denikryt/hackbridge-bot` and deploys it through Docker Stack using [docker-stack.yml](docker-stack.yml).
+- The production stack joins the external Docker network `infra_mongo-rs-net`, matching the `Feed-bot` deployment model.
+- Required repository secrets: `DEPLOY_USER`, `DEPLOY_HOST`, `DEPLOY_SSH_PRIVATE_KEY`, `MONGO_URI`, `MONGO_DB`, `DISCORD_TOKEN`, `AVATAR_COLLECTION_NAME`, `LOG_FILE`, `LOG_LEVEL`.
