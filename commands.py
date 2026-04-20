@@ -2,6 +2,7 @@ from discord import app_commands
 from discord.ext import commands
 import discord
 import json
+import re
 from roles import SuperAdmin, Admin, Registrator
 import helpers
 from logger_config import get_logger
@@ -13,6 +14,12 @@ logger = get_logger(__name__)
 
 
 def setup(bot):
+    def format_guild_display_name(guild: discord.Guild | None, fallback_name: str) -> str:
+        if guild:
+            return guild.name
+
+        # Strip stale IDs from persisted names like "Server Name(123456789012345678)".
+        return re.sub(r"\s*\(\d{10,}\)\s*$", "", fallback_name).strip() or fallback_name
 
     # ------------------------------------------
     # Functions for autocompletion
@@ -627,11 +634,12 @@ def setup(bot):
             guild = bot.get_guild(int(entry["guild_id"]))
             channel = guild.get_channel(int(entry["channel_id"])) if guild else None
             channel_name = channel.name if channel else entry.get("channel_name", entry["channel_id"])
+            guild_name = format_guild_display_name(guild, entry.get("guild_name", interaction.guild.name))
             source_options.append(
                 discord.SelectOption(
                     label=channel_name[:100],
                     value=entry["channel_id"],
-                    description=f"{interaction.guild.name} ({entry['channel_id']})"[:100],
+                    description=guild_name[:100],
                 )
             )
 
@@ -640,12 +648,12 @@ def setup(bot):
             guild = bot.get_guild(int(entry["guild_id"]))
             channel = guild.get_channel(int(entry["channel_id"])) if guild else None
             channel_name = channel.name if channel else entry.get("channel_name", entry["channel_id"])
-            guild_name = guild.name if guild else entry.get("guild_name", entry["guild_id"])
+            guild_name = format_guild_display_name(guild, entry.get("guild_name", entry["guild_id"]))
             target_options.append(
                 discord.SelectOption(
                     label=channel_name[:100],
                     value=f"{entry['guild_id']}:{entry['channel_id']}",
-                    description=f"{guild_name} ({entry['channel_id']})"[:100],
+                    description=guild_name[:100],
                 )
             )
 
