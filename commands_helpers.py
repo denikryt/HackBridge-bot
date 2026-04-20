@@ -2,10 +2,10 @@
 import asyncio
 
 from roles import SuperAdmin, Admin, Registrator
-import json
 import logging
 from typing import Any, Dict, List, Optional
 import discord
+import database
 
 logger = logging.getLogger("commands_helpers")
 
@@ -20,21 +20,10 @@ ROLE_CLASSES = {
 # ------------------------------------------
 
 def load_registered_channels(file_path="registered.json"):
-    try:
-        with open(file_path, "r") as f:
-            return json.load(f)
-    except FileNotFoundError as e:
-        logger.error(f"File not found: {e}")
-        return {"register": []}
-    except json.JSONDecodeError:
-        return {"register": []}
+    return database.load_registered_channels_state()
 
 def load_roles(file_path="roles.json"):
-    try:
-        with open(file_path, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {"superadmins": [], "admins": [], "registrators": []}
+    return database.load_roles_state()
 
 def get_user_role(user_id: str, guild_id: str, roles_data: dict):
     for role_name, users in roles_data.items():
@@ -61,26 +50,15 @@ def has_user_permission(user_id: str, guild_id: str, permission: str) -> bool:
     return False
 
 def load_linked_channels(file_path="linked_channels.json"):
-    try:
-        with open(file_path, "r") as f:
-            return json.load(f)
-    except FileNotFoundError as e:
-        logger.error(f"File not found: {e}")
-        return e
+    return database.load_linked_channel_groups_state()
 
 def remove_registrator(user_id: str, guild_id: str, file_path="roles.json"):
-    with open(file_path, "r") as f:
-        data = json.load(f)
-
-
-    # Remove the registrator entry for the given user and guild
+    data = load_roles()
     data["registrators"] = [
         user for user in data.get("registrators", [])
         if not (user["user_id"] == user_id and user["guild_id"] == guild_id)
     ]
-
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=2)
+    database.save_roles_state(data)
 
 #------------------------------------------
 # Get functions for linked groups
@@ -191,5 +169,16 @@ def remove_channels_from_registered(registered_channels: Dict[str, Any], channel
     ]
 
 def save_json_file(filename: str, data: Any):
-    with open(filename, "w") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+    if filename == "roles.json":
+        database.save_roles_state(data)
+        return
+
+    if filename == "registered.json":
+        database.save_registered_channels_state(data)
+        return
+
+    if filename == "linked_channels.json":
+        database.save_linked_channel_groups_state(data)
+        return
+
+    raise ValueError(f"Unsupported state filename: {filename}")

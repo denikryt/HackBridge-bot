@@ -11,6 +11,9 @@ MONGO_URI = os.environ.get("MONGO_URI") or os.environ.get("mongodb_uri")
 MONGODB_URI = MONGO_URI
 DB_NAME = os.environ.get("MONGO_DB") or "HackBridge"
 AVATAR_COLLECTION_NAME = os.environ.get("AVATAR_COLLECTION_NAME") or os.environ.get("avatar_collection_name") or "user_avatars_base"
+ROLES_COLLECTION_NAME = os.environ.get("ROLES_COLLECTION_NAME") or "hackbridge_roles_state"
+REGISTERED_CHANNELS_COLLECTION_NAME = os.environ.get("REGISTERED_CHANNELS_COLLECTION_NAME") or "hackbridge_registered_channels_state"
+LINKED_CHANNEL_GROUPS_COLLECTION_NAME = os.environ.get("LINKED_CHANNEL_GROUPS_COLLECTION_NAME") or "hackbridge_linked_channel_groups_state"
 DEFAULT_AVATAR = ":monkey_face:"
 
 AVATAR_EMOJIS = [

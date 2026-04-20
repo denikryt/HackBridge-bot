@@ -1,12 +1,12 @@
 import io
 import aiohttp
 from roles import SuperAdmin, Admin, Registrator
-import json 
 import config
 import emoji
 from header_state import HEADER_MARKER
 import discord
 import random
+import database
 
 ROLE_CLASSES = {
     "superadmins": SuperAdmin,
@@ -20,27 +20,13 @@ ROLE_CLASSES = {
 # These functions handle loading, saving, and checking user roles and permissions.
 
 def load_registered_channels(file_path="registered.json"):
-    try:
-        with open(file_path, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {"register": []}
-    except json.JSONDecodeError:
-        return {"register": []}
+    return database.load_registered_channels_state()
     
 def load_roles(file_path="roles.json"):
-    try:
-        with open(file_path, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {"superadmins": [], "admins": [], "registrators": []}
+    return database.load_roles_state()
     
 def load_linked_channels(file_path="linked_channels.json"):
-    try:
-        with open(file_path, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {"groups": []} 
+    return database.load_linked_channel_groups_state()
 
 def get_user_role(user_id: str, guild_id: str, roles_data: dict):
     for role_name, users in roles_data.items():
@@ -67,18 +53,12 @@ def has_user_permission(user_id: str, guild_id: str, permission: str) -> bool:
     return False
 
 def remove_registrator(user_id: str, guild_id: str, file_path="roles.json"):
-    with open(file_path, "r") as f:
-        data = json.load(f)
-
-
-    # Remove the registrator entry for the given user and guild
+    data = load_roles()
     data["registrators"] = [
         user for user in data.get("registrators", [])
         if not (user["user_id"] == user_id and user["guild_id"] == guild_id)
     ]
-
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=2)
+    database.save_roles_state(data)
 
 # ------------------------------------------
 # Helper functions for message and channel handling
@@ -88,11 +68,10 @@ def remove_registrator(user_id: str, guild_id: str, file_path="roles.json"):
 def find_linked_channels(channel_id: str, file_path="linked_channels.json"):
     linked_channels = load_linked_channels(file_path)
 
-    # Find and remove the channel_id from the group, return the remaining channel list
+    # Return the remaining channel IDs in the group without mutating persisted state.
     for group in linked_channels["groups"]:
         if channel_id in group["channel_list"]:
-            group["channel_list"].remove(channel_id)
-            return group["channel_list"]
+            return [linked_channel_id for linked_channel_id in group["channel_list"] if linked_channel_id != channel_id]
 
     return None
 
@@ -150,7 +129,6 @@ def form_header(message: discord.Message, guild_name: str, channel_group_len: in
     guild_id = message.guild.id
 
     # Get user's custom avatar emoji from database, or use random default from config
-    import database
     user_avatar = database.get_user_avatar(str(user_id))
     if user_avatar:
         avatar_emoji = user_avatar

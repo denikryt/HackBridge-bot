@@ -1,13 +1,13 @@
 from discord.ext import commands
 from discord import app_commands
 import discord
-import json
 import logging
 from config import TOKEN
 import commands as command_module
 import message_edit
 import message_delete
 import message_reaction
+import database
 from message_worker import MessageWorker
 import forum_sync
 from logger_config import setup_logging, get_logger
@@ -25,27 +25,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 forum_sync_handler = forum_sync.setup(bot)
 message_worker = MessageWorker(bot, forum_sync_handler)
 
-# Create files if they do not exist
-def create_files():
-    try:
-        with open("roles.json", "x") as f:
-            json.dump({"superadmins": [], "admins": [], "temporary_registrators": []}, f, indent=2)
-    except FileExistsError:
-        pass
-
-    try:
-        with open("registered.json", "x") as f:
-            json.dump({"register": []}, f, indent=2)
-    except FileExistsError:
-        pass
-
-    try:
-        with open("linked_channels.json", "x") as f:
-            json.dump({"groups": []}, f, indent=2)
-    except FileExistsError:
-        pass
-
-create_files()
+database.ensure_state_documents()
 
 @bot.event
 async def on_ready():

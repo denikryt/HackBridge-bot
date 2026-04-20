@@ -1,3 +1,4 @@
+import copy
 from pymongo import MongoClient
 import config
 from logger_config import get_logger
@@ -7,6 +8,101 @@ logger = get_logger(__name__)
 # MongoDB configuration
 mongo_client = MongoClient(config.MONGO_URI)
 db = mongo_client[config.DB_NAME]
+
+ROLES_STATE_DOC_ID = "roles_state"
+REGISTERED_CHANNELS_STATE_DOC_ID = "registered_channels_state"
+LINKED_CHANNEL_GROUPS_STATE_DOC_ID = "linked_channel_groups_state"
+
+DEFAULT_ROLES_STATE = {
+    "superadmins": [],
+    "admins": [],
+    "registrators": [],
+}
+
+DEFAULT_REGISTERED_CHANNELS_STATE = {
+    "register": [],
+}
+
+DEFAULT_LINKED_CHANNEL_GROUPS_STATE = {
+    "groups": [],
+}
+
+
+def _get_state_document(collection_name: str, doc_id: str, default_state: dict):
+    collection = db[collection_name]
+    result = collection.find_one({"_id": doc_id}, {"_id": 0})
+    if result is None:
+        return copy.deepcopy(default_state)
+    return result
+
+
+def _save_state_document(collection_name: str, doc_id: str, state: dict):
+    collection = db[collection_name]
+    document = {"_id": doc_id, **state}
+    collection.replace_one({"_id": doc_id}, document, upsert=True)
+
+
+def ensure_state_documents():
+    """Ensure singleton state documents exist for legacy JSON-backed data."""
+    db[config.ROLES_COLLECTION_NAME].update_one(
+        {"_id": ROLES_STATE_DOC_ID},
+        {"$setOnInsert": {"_id": ROLES_STATE_DOC_ID, **copy.deepcopy(DEFAULT_ROLES_STATE)}},
+        upsert=True,
+    )
+    db[config.REGISTERED_CHANNELS_COLLECTION_NAME].update_one(
+        {"_id": REGISTERED_CHANNELS_STATE_DOC_ID},
+        {"$setOnInsert": {"_id": REGISTERED_CHANNELS_STATE_DOC_ID, **copy.deepcopy(DEFAULT_REGISTERED_CHANNELS_STATE)}},
+        upsert=True,
+    )
+    db[config.LINKED_CHANNEL_GROUPS_COLLECTION_NAME].update_one(
+        {"_id": LINKED_CHANNEL_GROUPS_STATE_DOC_ID},
+        {"$setOnInsert": {"_id": LINKED_CHANNEL_GROUPS_STATE_DOC_ID, **copy.deepcopy(DEFAULT_LINKED_CHANNEL_GROUPS_STATE)}},
+        upsert=True,
+    )
+
+
+def load_roles_state():
+    return _get_state_document(
+        config.ROLES_COLLECTION_NAME,
+        ROLES_STATE_DOC_ID,
+        DEFAULT_ROLES_STATE,
+    )
+
+
+def save_roles_state(state: dict):
+    _save_state_document(config.ROLES_COLLECTION_NAME, ROLES_STATE_DOC_ID, state)
+
+
+def load_registered_channels_state():
+    return _get_state_document(
+        config.REGISTERED_CHANNELS_COLLECTION_NAME,
+        REGISTERED_CHANNELS_STATE_DOC_ID,
+        DEFAULT_REGISTERED_CHANNELS_STATE,
+    )
+
+
+def save_registered_channels_state(state: dict):
+    _save_state_document(
+        config.REGISTERED_CHANNELS_COLLECTION_NAME,
+        REGISTERED_CHANNELS_STATE_DOC_ID,
+        state,
+    )
+
+
+def load_linked_channel_groups_state():
+    return _get_state_document(
+        config.LINKED_CHANNEL_GROUPS_COLLECTION_NAME,
+        LINKED_CHANNEL_GROUPS_STATE_DOC_ID,
+        DEFAULT_LINKED_CHANNEL_GROUPS_STATE,
+    )
+
+
+def save_linked_channel_groups_state(state: dict):
+    _save_state_document(
+        config.LINKED_CHANNEL_GROUPS_COLLECTION_NAME,
+        LINKED_CHANNEL_GROUPS_STATE_DOC_ID,
+        state,
+    )
 
 def check_and_create_group_collection(group_name: str):
     if group_name not in db.list_collection_names():
