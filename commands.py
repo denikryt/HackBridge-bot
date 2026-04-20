@@ -209,66 +209,6 @@ def setup(bot):
     # Functions for slash commands
     # ------------------------------------------
 
-    @bot.tree.command(name="register_channel", description="Register this channel for forwarding messages")
-    async def register_channel(interaction: discord.Interaction):
-        logger.info(f"register_channel command invoked by {interaction.user.display_name} ({interaction.user.id}) in guild {interaction.guild.name} ({interaction.guild.id}), channel {interaction.channel.name} ({interaction.channel.id})")
-        
-        # Load existing registered channels
-        try:
-            registered_channels = helpers.load_registered_channels()
-            logger.debug("Successfully loaded registered channels data")
-        except Exception as e:
-            logger.error(f"Failed to load registered channels: {e}")
-            await interaction.response.send_message("An error occurred while loading data.", ephemeral=True)
-            return
-        
-        # Check if the command is used in a text or forum channel
-        if interaction.channel.type not in (discord.ChannelType.text, discord.ChannelType.forum):
-            logger.warning(f"register_channel command used in unsupported channel: {interaction.channel.type}")
-            await interaction.response.send_message("This command is available for text or forum channels only", ephemeral=True)
-            return
-        
-        # Check if the user has permission to register the channel
-        if not helpers.has_user_permission(str(interaction.user.id), str(interaction.guild.id), "register_channel"):
-            logger.warning(f"User {interaction.user.display_name} ({interaction.user.id}) denied permission to register channel")
-            await interaction.response.send_message("You have no permission to register channels for message forwarding.", ephemeral=True)
-            return
-        
-        # Making an entry with guild_id and channel_id in registered.json
-        guild_id = str(interaction.guild.id)
-        guild_name = interaction.guild.name if interaction.guild else "Unknown Guild"
-        channel_id = str(interaction.channel.id)
-
-        # Check if the channel is already registered
-        for entry in registered_channels["register"]:
-            if entry["guild_id"] == guild_id and entry["channel_id"] == channel_id:
-                logger.info(f"Channel {interaction.channel.name} ({channel_id}) already registered in guild {guild_name} ({guild_id})")
-                await interaction.response.send_message("This channel is already registered for message forwarding.", ephemeral=True)
-                return
-            
-        # Add new entry
-        entry = {
-            "guild_id": guild_id,   
-            "guild_name": guild_name,
-            "channel_id": channel_id,
-            "channel_name": interaction.channel.name,
-            "registrator_id": str(interaction.user.id),
-            "registrator_name": interaction.user.display_name,
-        }
-
-        registered_channels["register"].append(entry)
-        
-        try:
-            with open("registered.json", "w") as f:
-                json.dump(registered_channels, f, indent=4, ensure_ascii=False)
-            logger.info(f"Successfully registered channel {interaction.channel.name} ({channel_id}) by {interaction.user.display_name} ({interaction.user.id})")
-        except Exception as e:
-            logger.error(f"Failed to save registered channels data: {e}")
-            await interaction.response.send_message("An error occurred while saving data.", ephemeral=True)
-            return
-            
-        await interaction.response.send_message(f"Channel **{interaction.channel.name}** registered for message forwarding.", ephemeral=True)
-
     class RegisterChannelSelect(discord.ui.ChannelSelect):
         def __init__(self, invoker_id: str):
             super().__init__(
@@ -340,10 +280,10 @@ def setup(bot):
             for item in self.children:
                 item.disabled = True
 
-    @bot.tree.command(name="register_channel_new", description="Register a channel via dropdown selection")
-    async def register_channel_new(interaction: discord.Interaction):
+    @bot.tree.command(name="register_channel", description="Register a channel via dropdown selection")
+    async def register_channel(interaction: discord.Interaction):
         logger.info(
-            "register_channel_new invoked by %s (%s) in guild %s (%s)",
+            "register_channel invoked by %s (%s) in guild %s (%s)",
             interaction.user.display_name,
             interaction.user.id,
             interaction.guild.name if interaction.guild else "Unknown Guild",
