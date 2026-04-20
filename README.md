@@ -26,6 +26,7 @@ Discord bridge bot for linking channels (and threads) across servers while keepi
 
 Commands are exposed via Discord slash commands, each gated by the required role.
 Slash-command autocompletions guide the linking process and help fill in the necessary IDs.
+Full command reference: [docs/commands.md](docs/commands.md).
 
 ## Local Setup
 - Requirements: Python 3.8+, running MongoDB instance.
